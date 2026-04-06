@@ -1,569 +1,434 @@
 package br.sistema.view.panels;
 
 import br.sistema.model.Aplicacao;
+import br.sistema.model.Vacina;
 import br.sistema.repository.AplicacaoDAO;
+import br.sistema.repository.PacienteDAO;
+import br.sistema.repository.VacinaDAO;
 import br.sistema.util.Cores;
+import br.sistema.util.GerenciadorCaixa;
 import br.sistema.view.TelaPrincipal;
 import br.sistema.view.components.GlassPanel;
+import com.formdev.flatlaf.extras.FlatSVGIcon;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.border.LineBorder;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionAdapter;
+import java.awt.geom.Arc2D;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class PainelDashboard extends JPanel {
     private TelaPrincipal frame;
-    private JTable tabela;
-    private DefaultTableModel modeloTabela;
-    private int hoveredRow = -1;
-    private String abaAtiva = "Recentes";
-
-    private JButton btnAbaRecentes;
-    private JButton btnAbaHoje;
-    private JButton btnAbaProximas;
-
-    // --- AGORA USAMOS O BANCO REAL ---
-    private AplicacaoDAO dao;
-    private List<Aplicacao> todasAplicacoes;
-    private List<Aplicacao> aplicacoesFiltradas; // Usado para saber em qual linha clicamos
+    private CardLayout cardLayout;
+    private JPanel pnlCards;
+    private JButton btnNavVisao, btnNavFinanceiro;
 
     public PainelDashboard(TelaPrincipal frame) {
         this.frame = frame;
-        this.dao = new AplicacaoDAO();
         setOpaque(false);
         setLayout(new BorderLayout(0, 20));
         setBorder(new EmptyBorder(30, 40, 30, 40));
 
-        carregarDadosDoBanco(); // Puxa do SQLite
-        montarCardsTop();       // Calcula baseado nos dados
-        montarTabelaCentral();  // Desenha a tabela
-        atualizarDadosTabela(); // Filtra a aba atual
-    }
-
-    private void carregarDadosDoBanco() {
-        // Traz as aplicações reais que você salvou no formulário
-        todasAplicacoes = dao.listarTodas();
-    }
-
-    private void montarCardsTop() {
-        LocalDate hoje = LocalDate.now();
-        String dataFormatada = hoje.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-
-        long agendadasHoje = 0;
-        long pendentesGeral = 0;
-        double faturamentoHoje = 0.0;
-
-        // Calcula os resumos automaticamente
-        for (Aplicacao app : todasAplicacoes) {
-            try {
-                // Pega só os 10 primeiros caracteres para a data (dd/MM/yyyy)
-                String dataStr = app.getDataHora().length() >= 10 ? app.getDataHora().substring(0, 10) : app.getDataHora();
-                LocalDate dataApp = LocalDate.parse(dataStr, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-
-                if (app.getStatus().equalsIgnoreCase("Agendado")) {
-                    pendentesGeral++;
-                    if (dataApp.equals(hoje)) {
-                        agendadasHoje++;
-                    }
-                }
-                if (app.getStatus().equalsIgnoreCase("Aplicado") && dataApp.equals(hoje)) {
-                    faturamentoHoje += app.getValor();
-                }
-            } catch (Exception e) {
-                // Ignora erros de formatação na data para não quebrar o cálculo
-            }
-        }
-
-        JPanel painelCards = new JPanel(new GridLayout(1, 3, 25, 0));
-        painelCards.setOpaque(false);
-        painelCards.setPreferredSize(new Dimension(0, 130));
-
-        painelCards.add(criarCardResumo("Agendadas para Hoje", String.valueOf(agendadasHoje), Cores.VERDE_AQUA));
-        painelCards.add(criarCardLembrete());
-        painelCards.add(criarCardResumo("Faturamento - " + dataFormatada, String.format("R$ %.2f", faturamentoHoje), Cores.CINZA_GRAFITE));
-
-        add(painelCards, BorderLayout.NORTH);
-    }
-
-    private void montarTabelaCentral() {
         GlassPanel cardVidro = new GlassPanel();
         cardVidro.setLayout(new BorderLayout());
         cardVidro.setBorder(new EmptyBorder(25, 35, 30, 35));
 
-        JPanel header = new JPanel(new BorderLayout(20, 0));
+        // --- HEADER ---
+        JPanel header = new JPanel(new BorderLayout());
         header.setOpaque(false);
-        header.setBorder(new EmptyBorder(0, 0, 15, 0));
+        header.setBorder(new EmptyBorder(0, 0, 20, 0));
 
-        JLabel titulo = new JLabel("Painel de Aplicações");
-        titulo.setFont(new Font("Segoe UI Semilight", Font.PLAIN, 28));
+        JLabel titulo = new JLabel("Visão Geral da Clínica");
+        titulo.setFont(new Font("Segoe UI Semilight", Font.PLAIN, 32));
         titulo.setForeground(Cores.CINZA_GRAFITE);
         header.add(titulo, BorderLayout.WEST);
 
-        JPanel controles = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
-        controles.setOpaque(false);
+        // --- NAVBAR (Abas do Dashboard) ---
+        JPanel pnlNavbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 0));
+        pnlNavbar.setOpaque(false);
+        pnlNavbar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(220, 220, 220)));
 
-        JTextField txtBusca = new JTextField();
-        txtBusca.setPreferredSize(new Dimension(220, 45));
-        txtBusca.putClientProperty("JTextField.placeholderText", "Pesquisar paciente...");
-        txtBusca.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        btnNavVisao = criarBotaoNav("Visão Geral", true);
+        btnNavFinanceiro = criarBotaoNav("Relatório Financeiro", false);
 
-        JButton btnBuscar = new JButton("🔍");
-        btnBuscar.setPreferredSize(new Dimension(50, 45));
-        btnBuscar.setBackground(Color.WHITE);
-        btnBuscar.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnNavVisao.addActionListener(e -> trocarAba("VISAO", btnNavVisao));
+        btnNavFinanceiro.addActionListener(e -> trocarAba("FINANCEIRO", btnNavFinanceiro));
 
-        JButton btnNovo = new JButton("+ Agendar / Registrar");
-        btnNovo.setBackground(Cores.VERDE_AQUA);
-        btnNovo.setForeground(Color.WHITE);
-        btnNovo.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnNovo.setPreferredSize(new Dimension(190, 45));
-        btnNovo.addActionListener(e -> frame.trocarTelaCentral(new PainelFormulario(frame)));
+        pnlNavbar.add(btnNavVisao);
+        pnlNavbar.add(btnNavFinanceiro);
+        header.add(pnlNavbar, BorderLayout.SOUTH);
 
-        controles.add(txtBusca);
-        controles.add(btnBuscar);
-        controles.add(btnNovo);
-        header.add(controles, BorderLayout.EAST);
         cardVidro.add(header, BorderLayout.NORTH);
 
-        JPanel painelAbasWrapper = new JPanel(new BorderLayout());
-        painelAbasWrapper.setOpaque(false);
+        // --- CARDS PRINCIPAIS (CardLayout) ---
+        cardLayout = new CardLayout();
+        pnlCards = new JPanel(cardLayout);
+        pnlCards.setOpaque(false);
 
-        JPanel painelAbas = new JPanel(new FlowLayout(FlowLayout.LEFT, 30, 0));
-        painelAbas.setOpaque(false);
-        painelAbas.setBorder(new EmptyBorder(0, 0, 15, 0));
+        pnlCards.add(criarAbaVisaoGeral(), "VISAO");
+        pnlCards.add(criarAbaFinanceiro(), "FINANCEIRO");
 
-        btnAbaRecentes = criarBotaoAba("Recentes", true);
-        btnAbaHoje = criarBotaoAba("Hoje", false);
-        btnAbaProximas = criarBotaoAba("Próximas", false);
-
-        painelAbas.add(btnAbaRecentes);
-        painelAbas.add(btnAbaHoje);
-        painelAbas.add(btnAbaProximas);
-        painelAbasWrapper.add(painelAbas, BorderLayout.NORTH);
-
-        String[] colunas = {"DATA", "PACIENTE", "VACINA", "STATUS", "TOTAL"};
-        modeloTabela = new DefaultTableModel(new Object[][]{}, colunas) {
-            public boolean isCellEditable(int row, int column) { return false; }
-        };
-
-        tabela = new JTable(modeloTabela);
-        tabela.setRowHeight(50);
-        tabela.setShowVerticalLines(false);
-        tabela.setShowHorizontalLines(false);
-        tabela.setIntercellSpacing(new Dimension(0, 6));
-        tabela.setFont(new Font("Segoe UI", Font.PLAIN, 15));
-
-        tabela.setDefaultRenderer(Object.class, new CustomTableRenderer());
-
-        JPopupMenu menuContexto = criarMenuOpcoesTabela();
-
-        tabela.addMouseMotionListener(new MouseMotionAdapter() {
-            @Override
-            public void mouseMoved(MouseEvent e) {
-                int row = tabela.rowAtPoint(e.getPoint());
-                if (hoveredRow != row) {
-                    hoveredRow = row;
-                    tabela.repaint();
-                }
-            }
-        });
-
-        tabela.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseExited(MouseEvent e) {
-                hoveredRow = -1;
-                tabela.repaint();
-            }
-
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                int linhaClicada = tabela.rowAtPoint(e.getPoint());
-                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e) && linhaClicada != -1) {
-                    // Pega a aplicação real da lista filtrada
-                    Aplicacao app = aplicacoesFiltradas.get(linhaClicada);
-                    abrirModalDetalhes(app);
-                }
-            }
-
-            @Override
-            public void mouseReleased(MouseEvent e) {
-                if (SwingUtilities.isRightMouseButton(e)) {
-                    int linhaClicada = tabela.rowAtPoint(e.getPoint());
-                    if (linhaClicada >= 0) {
-                        tabela.setRowSelectionInterval(linhaClicada, linhaClicada);
-                        menuContexto.show(e.getComponent(), e.getX(), e.getY());
-                    }
-                }
-            }
-        });
-
-        JScrollPane scroll = new JScrollPane(tabela);
-        scroll.setBorder(BorderFactory.createEmptyBorder());
-        scroll.setOpaque(false);
-        scroll.getViewport().setBackground(Color.WHITE);
-
-        painelAbasWrapper.add(scroll, BorderLayout.CENTER);
-        cardVidro.add(painelAbasWrapper, BorderLayout.CENTER);
-
+        cardVidro.add(pnlCards, BorderLayout.CENTER);
         add(cardVidro, BorderLayout.CENTER);
     }
 
-    private JButton criarBotaoAba(String titulo, boolean ativoInicial) {
-        JButton btn = new JButton(titulo);
-        btn.setFont(new Font("Segoe UI", ativoInicial ? Font.BOLD : Font.PLAIN, 18));
-        btn.setForeground(ativoInicial ? Cores.VERDE_AQUA : Cores.CINZA_LABEL);
-        btn.setContentAreaFilled(false);
-        btn.setBorderPainted(false);
-        btn.setFocusPainted(false);
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btn.setBorder(new EmptyBorder(5, 0, 5, 0));
-
-        btn.addActionListener(e -> {
-            abaAtiva = titulo;
-            btnAbaRecentes.setFont(new Font("Segoe UI", Font.PLAIN, 18)); btnAbaRecentes.setForeground(Cores.CINZA_LABEL);
-            btnAbaHoje.setFont(new Font("Segoe UI", Font.PLAIN, 18)); btnAbaHoje.setForeground(Cores.CINZA_LABEL);
-            btnAbaProximas.setFont(new Font("Segoe UI", Font.PLAIN, 18)); btnAbaProximas.setForeground(Cores.CINZA_LABEL);
-
-            btn.setFont(new Font("Segoe UI", Font.BOLD, 18));
-            btn.setForeground(Cores.VERDE_AQUA);
-
-            atualizarDadosTabela();
-        });
-        return btn;
-    }
-
-    private void atualizarDadosTabela() {
-        modeloTabela.setRowCount(0);
-        LocalDate hoje = LocalDate.now();
-        aplicacoesFiltradas = new ArrayList<>();
-
-        for (Aplicacao a : todasAplicacoes) {
-            try {
-                String dataStr = a.getDataHora().length() >= 10 ? a.getDataHora().substring(0, 10) : a.getDataHora();
-                LocalDate dataApp = LocalDate.parse(dataStr, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-
-                if (abaAtiva.equals("Recentes") && a.getStatus().equalsIgnoreCase("Aplicado")) {
-                    aplicacoesFiltradas.add(a);
-                } else if (abaAtiva.equals("Hoje") && a.getStatus().equalsIgnoreCase("Agendado") && dataApp.equals(hoje)) {
-                    aplicacoesFiltradas.add(a);
-                } else if (abaAtiva.equals("Próximas") && a.getStatus().equalsIgnoreCase("Agendado") && dataApp.isAfter(hoje)) {
-                    aplicacoesFiltradas.add(a);
-                }
-            } catch (Exception e) {
-                // Se a data for inválida, joga nas recentes pra não perder o dado
-                if (abaAtiva.equals("Recentes")) aplicacoesFiltradas.add(a);
-            }
-        }
-
-        // Ordenar as "Próximas" pela data mais perto de hoje
-        if (abaAtiva.equals("Próximas")) {
-            aplicacoesFiltradas.sort((a1, a2) -> {
-                try {
-                    LocalDate d1 = LocalDate.parse(a1.getDataHora().substring(0, 10), DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                    LocalDate d2 = LocalDate.parse(a2.getDataHora().substring(0, 10), DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                    return d1.compareTo(d2);
-                } catch (Exception e) { return 0; }
-            });
-        }
-
-        for (Aplicacao a : aplicacoesFiltradas) {
-            String valorMonetario = String.format("R$ %.2f", a.getValor());
-            modeloTabela.addRow(new Object[]{a.getDataHora(), a.getPaciente(), a.getVacina(), a.getStatus(), valorMonetario});
-        }
-        hoveredRow = -1;
-    }
-
-    private class CustomTableRenderer extends DefaultTableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
-            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-            setBorder(new EmptyBorder(0, 15, 0, 15));
-
-            if (isSelected) {
-                c.setBackground(Cores.VERDE_AQUA);
-                c.setForeground(Color.WHITE);
-            } else if (row == hoveredRow) {
-                c.setBackground(new Color(210, 235, 235));
-                c.setForeground(Cores.CINZA_GRAFITE);
-            } else {
-                c.setBackground(Color.WHITE);
-                c.setForeground(Cores.CINZA_GRAFITE);
-            }
-            return c;
-        }
-    }
-
-    private JPanel criarCardLembrete() {
-        GlassPanel card = new GlassPanel() {
-            boolean isHovered = false;
-            {
-                addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseEntered(MouseEvent e) { isHovered = true; repaint(); setCursor(new Cursor(Cursor.HAND_CURSOR)); }
-                    @Override
-                    public void mouseExited(MouseEvent e) { isHovered = false; repaint(); }
-                });
-            }
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                if (isHovered) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    g2.setColor(new Color(255, 255, 255, 150));
-                    g2.fillRoundRect(0, 0, getWidth() - 12, getHeight() - 12, 25, 25);
-                    g2.setColor(Cores.ROSA_KAROL);
-                    g2.setStroke(new BasicStroke(2f));
-                    g2.drawRoundRect(0, 0, getWidth() - 12, getHeight() - 12, 25, 25);
-                    g2.dispose();
-                }
-            }
-        };
-        card.setLayout(new BorderLayout());
-        card.setBorder(new EmptyBorder(20, 25, 20, 25));
-
-        JLabel lblTitulo = new JLabel("Lembrete Rápido");
-        lblTitulo.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        lblTitulo.setForeground(Cores.CINZA_LABEL);
-
-        JLabel lblValor = new JLabel("<html><i>+ Adicionar nota</i></html>");
-        lblValor.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        lblValor.setForeground(Cores.ROSA_KAROL);
-
-        JPanel pnl = new JPanel(new BorderLayout(0, 5));
+    private JPanel criarAbaVisaoGeral() {
+        JPanel pnl = new JPanel(new BorderLayout(20, 20));
         pnl.setOpaque(false);
-        pnl.add(lblTitulo, BorderLayout.NORTH);
-        pnl.add(lblValor, BorderLayout.CENTER);
+        pnl.setBorder(new EmptyBorder(15, 0, 0, 0));
 
-        card.add(pnl, BorderLayout.CENTER);
+        // 1. CARDS DE RESUMO RÁPIDO (DADOS REAIS)
+        JPanel pnlResumo = new JPanel(new GridLayout(1, 3, 20, 0));
+        pnlResumo.setOpaque(false);
+        pnlResumo.setPreferredSize(new Dimension(0, 120));
 
-        card.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                String texto = JOptionPane.showInputDialog(frame, "Digite o lembrete para hoje:", "Novo Lembrete", JOptionPane.PLAIN_MESSAGE);
-                if (texto != null && !texto.trim().isEmpty()) {
-                    lblValor.setText("<html><div style='width: 200px; font-weight: bold; font-size: 15px;'>" + texto + "</div></html>");
-                    lblValor.setForeground(Cores.CINZA_GRAFITE);
-                } else if (texto != null && texto.trim().isEmpty()) {
-                    lblValor.setText("<html><i>+ Adicionar nota</i></html>");
-                    lblValor.setForeground(Cores.ROSA_KAROL);
-                }
+        int totalPacientes = new PacienteDAO().listarTodos().size();
+
+        List<Aplicacao> todasAplicacoes = new AplicacaoDAO().listarTodas();
+        long totalAplicadas = todasAplicacoes.stream()
+                .filter(a -> "Aplicado".equalsIgnoreCase(a.getStatus()))
+                .count();
+
+        int totalEstoque = 0;
+        // AJUSTE: Usando qtdDisponivel conforme o seu modelo
+        for (Vacina v : new VacinaDAO().listarTodas()) {
+            totalEstoque += v.getQtdDisponivel();
+        }
+
+        pnlResumo.add(criarKpiCard("Pacientes Registrados", String.valueOf(totalPacientes), "member-list.svg", Cores.VERDE_AQUA));
+        pnlResumo.add(criarKpiCard("Doses Aplicadas", String.valueOf(totalAplicadas), "adicionar.svg", Cores.ROSA_KAROL));
+        pnlResumo.add(criarKpiCard("Vacinas no Estoque", String.valueOf(totalEstoque), "procurar.svg", new Color(243, 156, 18)));
+        pnl.add(pnlResumo, BorderLayout.NORTH);
+
+        // 2. CORPO (Gráficos e Listas)
+        JPanel pnlCorpo = new JPanel(new GridLayout(1, 2, 20, 0));
+        pnlCorpo.setOpaque(false);
+
+        // DADOS REAIS: Vacinas Mais Aplicadas
+        JPanel pnlTopVacinas = criarPainelSessao("Vacinas Mais Aplicadas");
+
+        Map<String, Integer> contagemVacinas = new HashMap<>();
+        for (Aplicacao app : todasAplicacoes) {
+            if ("Aplicado".equalsIgnoreCase(app.getStatus())) {
+                String nome = app.getVacina().getNomeVacina();
+                contagemVacinas.put(nome, contagemVacinas.getOrDefault(nome, 0) + 1);
             }
-        });
-        return card;
+        }
+
+        List<Map.Entry<String, Integer>> topVacinas = contagemVacinas.entrySet().stream()
+                .sorted((e1, e2) -> e2.getValue().compareTo(e1.getValue()))
+                .limit(4)
+                .collect(Collectors.toList());
+
+        Color[] coresTop = {new Color(52, 152, 219), new Color(155, 89, 182), new Color(230, 126, 34), new Color(46, 204, 113)};
+
+        if (topVacinas.isEmpty()) {
+            pnlTopVacinas.add(new JLabel("Aguardando primeiras aplicações..."));
+        } else {
+            int maxAplicacoes = topVacinas.get(0).getValue();
+            for (int i = 0; i < topVacinas.size(); i++) {
+                Map.Entry<String, Integer> entry = topVacinas.get(i);
+                int porcentagem = (int) (((double) entry.getValue() / maxAplicacoes) * 100);
+                pnlTopVacinas.add(criarBarraProgresso(entry.getKey() + " (" + entry.getValue() + ")", porcentagem, coresTop[i % coresTop.length]));
+                if(i < topVacinas.size() -1) pnlTopVacinas.add(Box.createVerticalStrut(15));
+            }
+        }
+        pnlCorpo.add(pnlTopVacinas);
+
+        // DADOS REAIS: Próximos Agendamentos
+        JPanel pnlAgendamentos = criarPainelSessao("📅 Próximos Agendamentos");
+
+        LocalDate hoje = LocalDate.now();
+        List<Aplicacao> agendamentos = todasAplicacoes.stream()
+                .filter(a -> "Agendado".equalsIgnoreCase(a.getStatus()))
+                .filter(a -> a.getDataHora() != null && !a.getDataHora().toLocalDate().isBefore(hoje))
+                .sorted((a1, a2) -> a1.getDataHora().compareTo(a2.getDataHora()))
+                .limit(3)
+                .collect(Collectors.toList());
+
+        if (agendamentos.isEmpty()) {
+            pnlAgendamentos.add(new JLabel("Nenhum agendamento para os próximos dias."));
+        } else {
+            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM HH:mm");
+            for (Aplicacao app : agendamentos) {
+                pnlAgendamentos.add(criarItemNotificacao(
+                        app.getPaciente().getNome(),
+                        app.getDataHora().format(dtf),
+                        app.getVacina().getNomeVacina()
+                ));
+            }
+        }
+        pnlCorpo.add(pnlAgendamentos);
+
+        pnl.add(pnlCorpo, BorderLayout.CENTER);
+        return pnl;
     }
 
-    private JPanel criarCardResumo(String titulo, String valor, Color corDestaque) {
-        GlassPanel card = new GlassPanel() {
-            boolean isHovered = false;
-            {
-                addMouseListener(new MouseAdapter() {
-                    @Override
-                    public void mouseEntered(MouseEvent e) { isHovered = true; repaint(); setCursor(new Cursor(Cursor.HAND_CURSOR)); }
-                    @Override
-                    public void mouseExited(MouseEvent e) { isHovered = false; repaint(); }
-                });
-            }
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                if (isHovered) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                    g2.setColor(new Color(255, 255, 255, 150));
-                    g2.fillRoundRect(0, 0, getWidth() - 12, getHeight() - 12, 25, 25);
-                    g2.setColor(corDestaque);
-                    g2.setStroke(new BasicStroke(2f));
-                    g2.drawRoundRect(0, 0, getWidth() - 12, getHeight() - 12, 25, 25);
-                    g2.dispose();
-                }
-            }
-        };
-        card.setLayout(new BorderLayout());
-        card.setBorder(new EmptyBorder(25, 30, 25, 30));
+    private JPanel criarAbaFinanceiro() {
+        JPanel pnl = new JPanel(new BorderLayout(20, 20));
+        pnl.setOpaque(false);
+        pnl.setBorder(new EmptyBorder(15, 0, 0, 0));
+
+        JPanel pnlCaixa = new JPanel(new GridLayout(1, 3, 20, 0));
+        pnlCaixa.setOpaque(false);
+        pnlCaixa.setPreferredSize(new Dimension(0, 120));
+
+        // DADOS REAIS: Puxando o saldo do GerenciadorCaixa
+        double saldoCaixa = GerenciadorCaixa.getSaldoAtualCaixa();
+
+        // Puxando entradas totais e saídas totais apenas para visualização
+        double totalEntradas = calcularTotalEntradas();
+        double totalSaidas = calcularTotalSaidas();
+
+        pnlCaixa.add(criarKpiCard("Entradas Totais", String.format("R$ %,.2f", totalEntradas), "adicionar.svg", new Color(46, 204, 113)));
+        pnlCaixa.add(criarKpiCard("Saídas Totais", String.format("R$ %,.2f", totalSaidas), "trash.svg", new Color(231, 76, 60)));
+        pnlCaixa.add(criarKpiCard("Saldo em Caixa", String.format("R$ %,.2f", saldoCaixa), "doar.svg", new Color(52, 152, 219)));
+        pnl.add(pnlCaixa, BorderLayout.NORTH);
+
+        JPanel pnlCorpo = new JPanel(new BorderLayout());
+        pnlCorpo.setOpaque(false);
+
+        JPanel pnlGrafico = criarPainelSessao("Comparativo Geral (Entradas vs Saídas)");
+        pnlGrafico.setLayout(new BorderLayout());
+
+        // Passa os valores reais para o gráfico desenhar
+        GraficoPizzaFinanceiro graficoPizza = new GraficoPizzaFinanceiro(totalEntradas, totalSaidas);
+        pnlGrafico.add(graficoPizza, BorderLayout.CENTER);
+
+        JPanel pnlLegendas = new JPanel(new FlowLayout(FlowLayout.CENTER, 30, 10));
+        pnlLegendas.setOpaque(false);
+
+        // Calcula a porcentagem para a legenda
+        double somaGeral = totalEntradas + totalSaidas;
+        int pctEntradas = somaGeral > 0 ? (int) Math.round((totalEntradas / somaGeral) * 100) : 0;
+        int pctSaidas = somaGeral > 0 ? (int) Math.round((totalSaidas / somaGeral) * 100) : 0;
+
+        pnlLegendas.add(criarLegenda("Entradas (" + pctEntradas + "%)", new Color(46, 204, 113)));
+        pnlLegendas.add(criarLegenda("Saídas (" + pctSaidas + "%)", new Color(231, 76, 60)));
+
+        pnlGrafico.add(pnlLegendas, BorderLayout.SOUTH);
+
+        pnlCorpo.add(pnlGrafico, BorderLayout.CENTER);
+        pnl.add(pnlCorpo, BorderLayout.CENTER);
+
+        return pnl;
+    }
+
+    // Métodos Auxiliares de Consulta Direta ao Banco para Totais
+    private double calcularTotalEntradas() {
+        double entradas = 0;
+        for (Aplicacao a : new AplicacaoDAO().listarTodas()) { entradas += a.getValor(); }
+        try (Connection c = br.sistema.repository.ConnectionFactory.getConnection();
+             PreparedStatement p = c.prepareStatement("SELECT SUM(valor) FROM lancamentos_outros WHERE tipo = 'Entrada avulsa' OR tipo = 'Receita'")) {
+            try (ResultSet rs = p.executeQuery()) { if (rs.next()) entradas += rs.getDouble(1); }
+        } catch (Exception e) {}
+        return entradas;
+    }
+
+    private double calcularTotalSaidas() {
+        double saidas = 0;
+        try (Connection c = br.sistema.repository.ConnectionFactory.getConnection();
+             PreparedStatement p = c.prepareStatement("SELECT SUM(valor) FROM lancamentos_outros WHERE tipo = 'Saída avulsa' OR tipo = 'Despesa'")) {
+            try (ResultSet rs = p.executeQuery()) { if (rs.next()) saidas += rs.getDouble(1); }
+        } catch (Exception e) {}
+        return saidas;
+    }
+
+    private JPanel criarKpiCard(String titulo, String valor, String icone, Color corAcento) {
+        JPanel card = new JPanel(new BorderLayout(15, 0));
+        card.setBackground(Color.WHITE);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(new Color(230, 230, 230), 1, true),
+                new EmptyBorder(20, 20, 20, 20)
+        ));
+
+        JPanel textos = new JPanel(new GridLayout(2, 1));
+        textos.setOpaque(false);
 
         JLabel lblTitulo = new JLabel(titulo);
         lblTitulo.setFont(new Font("Segoe UI", Font.BOLD, 14));
         lblTitulo.setForeground(Cores.CINZA_LABEL);
 
         JLabel lblValor = new JLabel(valor);
-        lblValor.setFont(new Font("Segoe UI", Font.BOLD, 32));
-        lblValor.setForeground(corDestaque);
+        lblValor.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        lblValor.setForeground(new Color(50, 50, 50));
 
-        JPanel pnl = new JPanel(new GridLayout(2, 1, 0, 5));
-        pnl.setOpaque(false);
-        pnl.add(lblTitulo);
-        pnl.add(lblValor);
+        textos.add(lblTitulo); textos.add(lblValor);
+        card.add(textos, BorderLayout.CENTER);
 
-        card.add(pnl, BorderLayout.CENTER);
+        JLabel lblIcone = new JLabel();
+        Icon icn = carregarIconeBlindado(icone, 40, corAcento);
+        if (icn != null) lblIcone.setIcon(icn);
+        card.add(lblIcone, BorderLayout.EAST);
+
+        JPanel linhaBase = new JPanel();
+        linhaBase.setPreferredSize(new Dimension(0, 4));
+        linhaBase.setBackground(corAcento);
+        card.add(linhaBase, BorderLayout.SOUTH);
+
         return card;
     }
 
-    // --- AGORA AS AÇÕES DO BOTÃO DIREITO REALMENTE AFETAM O BANCO ---
-    private JPopupMenu criarMenuOpcoesTabela() {
-        JPopupMenu popup = new JPopupMenu();
-        popup.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(210, 210, 210), 1),
-                new EmptyBorder(8, 0, 8, 0)
+    private JPanel criarPainelSessao(String titulo) {
+        JPanel pnl = new JPanel();
+        pnl.setLayout(new BoxLayout(pnl, BoxLayout.Y_AXIS));
+        pnl.setBackground(Color.WHITE);
+        pnl.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(new Color(230, 230, 230), 1, true),
+                new EmptyBorder(20, 20, 20, 20)
         ));
 
-        JMenuItem itemAplicar = criarItemMenu("✅  Marcar como Aplicada", Cores.VERDE_AQUA, Cores.VERDE_AQUA);
-        itemAplicar.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        JLabel lbl = new JLabel(titulo);
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        lbl.setForeground(new Color(50, 50, 50));
+        lbl.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JMenuItem itemDetalhes = criarItemMenu("🔍  Ver ou Alterar Detalhes", Cores.CINZA_GRAFITE, Cores.VERDE_AQUA);
-        JMenuItem itemWhatsApp = criarItemMenu("📲  Enviar via WhatsApp", Cores.CINZA_GRAFITE, Cores.VERDE_AQUA);
-        JMenuItem itemExcluir  = criarItemMenu("🗑️  Excluir Registro", new Color(220, 53, 69), new Color(190, 30, 45));
-
-        // Marcar como Aplicado (Conecta com DAO)
-        itemAplicar.addActionListener(e -> {
-            int linha = tabela.getSelectedRow();
-            if (linha >= 0) {
-                Aplicacao app = aplicacoesFiltradas.get(linha);
-                dao.atualizarStatus(app.getId(), "Aplicado");
-                JOptionPane.showMessageDialog(this, "Status de " + app.getPaciente() + " alterado para APLICADO!");
-                frame.trocarTelaCentral(new PainelDashboard(frame)); // Recarrega tudo (tabela e cards)
-            }
-        });
-
-        // Ver Detalhes (Puxa objeto real)
-        itemDetalhes.addActionListener(e -> {
-            int linha = tabela.getSelectedRow();
-            if(linha >= 0) abrirModalDetalhes(aplicacoesFiltradas.get(linha));
-        });
-
-        // Excluir (Conecta com DAO)
-        itemExcluir.addActionListener(e -> {
-            int linha = tabela.getSelectedRow();
-            if (linha >= 0) {
-                Aplicacao app = aplicacoesFiltradas.get(linha);
-                int confirm = JOptionPane.showConfirmDialog(this, "Deseja excluir permanentemente o registro de " + app.getPaciente() + "?", "Atenção", JOptionPane.YES_NO_OPTION);
-                if(confirm == JOptionPane.YES_OPTION) {
-                    dao.excluir(app.getId());
-                    frame.trocarTelaCentral(new PainelDashboard(frame)); // Recarrega tudo
-                }
-            }
-        });
-
-        popup.add(itemAplicar);
-        popup.addSeparator();
-        popup.add(itemDetalhes);
-        popup.add(itemWhatsApp);
-        popup.addSeparator();
-        popup.add(itemExcluir);
-
-        return popup;
+        pnl.add(lbl); pnl.add(Box.createVerticalStrut(20));
+        return pnl;
     }
 
-    private JMenuItem criarItemMenu(String texto, Color corTextoNormal, Color corTextoHover) {
-        JMenuItem item = new JMenuItem(texto);
-        item.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        item.setBorder(new EmptyBorder(8, 15, 8, 25));
-        item.setCursor(new Cursor(Cursor.HAND_CURSOR));
+    private JPanel criarBarraProgresso(String tituloBarra, int porcentagemParaBarra, Color cor) {
+        JPanel pnl = new JPanel(new BorderLayout(0, 5));
+        pnl.setOpaque(false); pnl.setAlignmentX(Component.LEFT_ALIGNMENT);
+        pnl.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
 
-        item.setForeground(corTextoNormal);
-        item.setBackground(Color.WHITE);
+        JLabel lbl = new JLabel(tituloBarra);
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lbl.setForeground(Cores.CINZA_GRAFITE);
 
-        item.addChangeListener(e -> {
-            if (item.isArmed()) {
-                item.setForeground(corTextoHover);
-                item.setBackground(new Color(242, 245, 248));
+        JProgressBar pb = new JProgressBar(0, 100);
+        pb.setValue(porcentagemParaBarra); pb.setStringPainted(false); pb.setForeground(cor);
+        pb.setBackground(new Color(240, 240, 240)); pb.setBorderPainted(false);
+        pb.setPreferredSize(new Dimension(0, 10));
+
+        pnl.add(lbl, BorderLayout.NORTH); pnl.add(pb, BorderLayout.CENTER);
+        return pnl;
+    }
+
+    private JPanel criarItemNotificacao(String nomePaciente, String detalheData, String nomeVacina) {
+        JPanel pnl = new JPanel(new BorderLayout(15, 0));
+        pnl.setBackground(new Color(250, 252, 255));
+        pnl.setBorder(BorderFactory.createCompoundBorder(
+                new LineBorder(new Color(220, 230, 240), 1, true),
+                new EmptyBorder(10, 15, 10, 15)
+        ));
+        pnl.setAlignmentX(Component.LEFT_ALIGNMENT);
+        pnl.setMaximumSize(new Dimension(Integer.MAX_VALUE, 70));
+
+        JLabel lblIcone = new JLabel("💉");
+        lblIcone.setFont(new Font("Segoe UI", Font.PLAIN, 24));
+        pnl.add(lblIcone, BorderLayout.WEST);
+
+        JPanel pnlTextos = new JPanel(new GridLayout(2, 1)); pnlTextos.setOpaque(false);
+
+        JLabel lblNome = new JLabel(nomePaciente + " - " + detalheData);
+        lblNome.setFont(new Font("Segoe UI", Font.BOLD, 14)); lblNome.setForeground(new Color(50, 50, 50));
+
+        JLabel lblVacina = new JLabel("Vacina: " + nomeVacina);
+        lblVacina.setFont(new Font("Segoe UI", Font.ITALIC, 12)); lblVacina.setForeground(Cores.VERDE_AQUA);
+
+        pnlTextos.add(lblNome); pnlTextos.add(lblVacina);
+        pnl.add(pnlTextos, BorderLayout.CENTER);
+
+        return pnl;
+    }
+
+    private JPanel criarLegenda(String texto, Color cor) {
+        JPanel pnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0)); pnl.setOpaque(false);
+        JPanel bolinha = new JPanel(); bolinha.setPreferredSize(new Dimension(12, 12)); bolinha.setBackground(cor);
+        JLabel lbl = new JLabel(texto); lbl.setFont(new Font("Segoe UI", Font.BOLD, 12)); lbl.setForeground(new Color(100, 100, 100));
+        pnl.add(bolinha); pnl.add(lbl);
+        return pnl;
+    }
+
+    // Gráfico de Pizza Dinâmico para Financeiro
+    private class GraficoPizzaFinanceiro extends JPanel {
+        private double entradas;
+        private double saidas;
+
+        public GraficoPizzaFinanceiro(double entradas, double saidas) {
+            this.entradas = entradas;
+            this.saidas = saidas;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            int width = getWidth(); int height = getHeight();
+            int size = Math.min(width, height) - 40;
+            if (size <= 0) return;
+
+            int x = (width - size) / 2; int y = (height - size) / 2;
+
+            double total = entradas + saidas;
+            if (total == 0) {
+                // Se não tem dados, desenha um arco cinza claro
+                g2.setColor(new Color(230, 230, 230));
+                g2.fill(new Arc2D.Double(x, y, size, size, 0, 360, Arc2D.PIE));
             } else {
-                item.setForeground(corTextoNormal);
-                item.setBackground(Color.WHITE);
+                double anguloEntradas = (entradas / total) * 360;
+                double anguloSaidas = (saidas / total) * 360;
+
+                // Desenha Entradas (Verde)
+                g2.setColor(new Color(46, 204, 113));
+                g2.fill(new Arc2D.Double(x, y, size, size, 0, anguloEntradas, Arc2D.PIE));
+
+                // Desenha Saídas (Vermelho)
+                g2.setColor(new Color(231, 76, 60));
+                g2.fill(new Arc2D.Double(x, y, size, size, anguloEntradas, anguloSaidas, Arc2D.PIE));
+
+                // Linhas Divisórias Brancas
+                g2.setColor(Color.WHITE); g2.setStroke(new BasicStroke(3f));
+                g2.draw(new Arc2D.Double(x, y, size, size, 0, anguloEntradas, Arc2D.PIE));
+                g2.draw(new Arc2D.Double(x, y, size, size, anguloEntradas, anguloSaidas, Arc2D.PIE));
             }
-        });
-        return item;
+
+            // Furo no meio para fazer o "Donut Chart"
+            int furoSize = size / 2;
+            g2.setColor(Color.WHITE);
+            g2.fillOval(x + (size - furoSize) / 2, y + (size - furoSize) / 2, furoSize, furoSize);
+
+            g2.setColor(Cores.CINZA_GRAFITE); g2.setFont(new Font("Segoe UI", Font.BOLD, 18));
+            FontMetrics fm = g2.getFontMetrics(); String textoCentro = "Fluxo";
+            g2.drawString(textoCentro, (width - fm.stringWidth(textoCentro)) / 2, height / 2);
+        }
     }
 
-    private void abrirModalDetalhes(Aplicacao app) {
-        JDialog dialog = new JDialog(frame, "Detalhes da Aplicação", true);
-        dialog.setSize(550, 650);
-        dialog.setLocationRelativeTo(frame);
-
-        JPanel pnlBase = new JPanel(new BorderLayout());
-        pnlBase.setBackground(Color.WHITE);
-        pnlBase.setBorder(new EmptyBorder(30, 40, 30, 40));
-
-        JLabel lblTitulo = new JLabel("Editar Registro");
-        lblTitulo.setFont(new Font("Segoe UI Semilight", Font.PLAIN, 28));
-        lblTitulo.setForeground(Cores.VERDE_AQUA);
-        pnlBase.add(lblTitulo, BorderLayout.NORTH);
-
-        JPanel pnlCampos = new JPanel(new GridLayout(5, 1, 0, 15));
-        pnlCampos.setOpaque(false);
-        pnlCampos.setBorder(new EmptyBorder(20, 0, 20, 0));
-
-        pnlCampos.add(criarBlocoCampoModal("PACIENTE:", app.getPaciente()));
-        pnlCampos.add(criarBlocoCampoModal("VACINA APLICADA:", app.getVacina()));
-        pnlCampos.add(criarBlocoCampoModal("DATA / HORA:", app.getDataHora()));
-
-        JPanel pStatus = new JPanel(new BorderLayout(0, 5));
-        pStatus.setOpaque(false);
-        JLabel lStatus = new JLabel("STATUS:");
-        lStatus.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        lStatus.setForeground(Cores.CINZA_LABEL);
-        JComboBox<String> cbStatus = new JComboBox<>(new String[]{"Agendado", "Aplicado"});
-        cbStatus.setSelectedItem(app.getStatus());
-        cbStatus.setPreferredSize(new Dimension(0, 45));
-        cbStatus.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        cbStatus.setBackground(Color.WHITE);
-        pStatus.add(lStatus, BorderLayout.NORTH);
-        pStatus.add(cbStatus, BorderLayout.CENTER);
-        pnlCampos.add(pStatus);
-
-        pnlCampos.add(criarBlocoCampoModal("VALOR (R$):", String.format("%.2f", app.getValor())));
-
-        pnlBase.add(pnlCampos, BorderLayout.CENTER);
-
-        JPanel pnlBotoes = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
-        pnlBotoes.setOpaque(false);
-
-        JButton btnCancelar = new JButton("Cancelar");
-        btnCancelar.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnCancelar.setBackground(new Color(230, 230, 230));
-        btnCancelar.setPreferredSize(new Dimension(120, 45));
-        btnCancelar.addActionListener(e -> dialog.dispose());
-
-        JButton btnSalvar = new JButton("Salvar Alterações");
-        btnSalvar.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnSalvar.setForeground(Color.WHITE);
-        btnSalvar.setBackground(Cores.VERDE_AQUA);
-        btnSalvar.setPreferredSize(new Dimension(160, 45));
-        btnSalvar.addActionListener(e -> {
-            JOptionPane.showMessageDialog(dialog, "Atualização disponível na próxima versão!");
-            dialog.dispose();
-        });
-
-        pnlBotoes.add(btnCancelar);
-        pnlBotoes.add(btnSalvar);
-        pnlBase.add(pnlBotoes, BorderLayout.SOUTH);
-
-        dialog.add(pnlBase);
-        dialog.setVisible(true);
+    private JButton criarBotaoNav(String texto, boolean ativo) {
+        JButton btn = new JButton(texto);
+        btn.setFont(new Font("Segoe UI", ativo ? Font.BOLD : Font.PLAIN, 18));
+        btn.setForeground(ativo ? Cores.VERDE_AQUA : Cores.CINZA_LABEL);
+        btn.setContentAreaFilled(false); btn.setBorderPainted(false); btn.setFocusPainted(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR)); btn.setBorder(new EmptyBorder(10, 15, 10, 15));
+        return btn;
     }
 
-    private JPanel criarBlocoCampoModal(String label, String valor) {
-        JPanel p = new JPanel(new BorderLayout(0, 5));
-        p.setOpaque(false);
-        JLabel l = new JLabel(label);
-        l.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        l.setForeground(Cores.CINZA_LABEL);
+    private void trocarAba(String aba, JButton btnAtivo) {
+        cardLayout.show(pnlCards, aba);
+        btnNavVisao.setFont(new Font("Segoe UI", Font.PLAIN, 18)); btnNavVisao.setForeground(Cores.CINZA_LABEL);
+        btnNavFinanceiro.setFont(new Font("Segoe UI", Font.PLAIN, 18)); btnNavFinanceiro.setForeground(Cores.CINZA_LABEL);
+        btnAtivo.setFont(new Font("Segoe UI", Font.BOLD, 18)); btnAtivo.setForeground(Cores.VERDE_AQUA);
+    }
 
-        JTextField t = new JTextField(valor);
-        t.setPreferredSize(new Dimension(0, 45));
-        t.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-
-        p.add(l, BorderLayout.NORTH);
-        p.add(t, BorderLayout.CENTER);
-        return p;
+    private FlatSVGIcon carregarIconeBlindado(String nomeArquivo, int tamanho, Color cor) {
+        try {
+            java.net.URL imgURL = getClass().getResource("/icons/" + nomeArquivo);
+            if (imgURL != null) {
+                return (FlatSVGIcon) new FlatSVGIcon(imgURL).derive(tamanho, tamanho).setColorFilter(new FlatSVGIcon.ColorFilter(c -> cor));
+            }
+        } catch (Exception e) {}
+        return null;
     }
 }

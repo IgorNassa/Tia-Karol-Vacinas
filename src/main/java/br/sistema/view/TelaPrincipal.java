@@ -67,7 +67,24 @@ public class TelaPrincipal extends JFrame {
             UIManager.put("PopupMenu.background", Color.WHITE);
             UIManager.put("MenuItem.selectionBackground", new Color(242, 245, 248));
 
-        } catch (Exception e) { e.printStackTrace(); }
-        SwingUtilities.invokeLater(() -> new TelaPrincipal().setVisible(true));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            TelaPrincipal tela = new TelaPrincipal();
+
+            // 1. Configura a Quebra de Caixa ao Clicar no X
+            br.sistema.util.GerenciadorCaixa.configurarFechamento(tela);
+
+            // 2. Exibe a tela de fundo
+            tela.setVisible(true);
+
+            // 3. Pula o Abertura de Caixa
+            br.sistema.util.GerenciadorCaixa.iniciarAbertura(tela);
+
+            // 4. Pula o Modal de Alertas Críticos do Estoque
+            br.sistema.view.components.ModalAlertasEstoque.verificarEExibir(tela);
+        });
     }
 }

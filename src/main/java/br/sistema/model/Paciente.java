@@ -7,18 +7,44 @@ public class Paciente {
     private String nome;
     private String cpf;
     private LocalDate dataNascimento;
+    private String sexo;
+    private String cartaoSus;
+    private String telefone;
+    private String telefone2;
     private String alergias;
+    private String medicoEncaminhador; // <--- NOVO CAMPO
+
+    // Responsável Legal
+    private String nomeResponsavel;
+    private String cpfResponsavel;
+
+    private byte[] foto;
+    private Endereco endereco;
 
     public Paciente() {}
 
-    public int getId() { return id; }
-    public void setId(int id) { this.id = id; }
-    public String getNome() { return nome; }
-    public void setNome(String nome) { this.nome = nome; }
-    public String getCpf() { return cpf; }
-    public void setCpf(String cpf) { this.cpf = cpf; }
-    public LocalDate getDataNascimento() { return dataNascimento; }
-    public void setDataNascimento(LocalDate dataNascimento) { this.dataNascimento = dataNascimento; }
-    public String getAlergias() { return alergias; }
-    public void setAlergias(String alergias) { this.alergias = alergias; }
+    public Paciente(String nome, String cpf, LocalDate dataNascimento, String sexo, String cartaoSus,
+                    String telefone, String telefone2, String alergias, String medicoEncaminhador,
+                    String nomeResponsavel, String cpfResponsavel, byte[] foto, Endereco endereco) {
+        this.nome = nome; this.cpf = cpf; this.dataNascimento = dataNascimento;
+        this.sexo = sexo; this.cartaoSus = cartaoSus; this.telefone = telefone;
+        this.telefone2 = telefone2; this.alergias = alergias; this.medicoEncaminhador = medicoEncaminhador;
+        this.nomeResponsavel = nomeResponsavel; this.cpfResponsavel = cpfResponsavel;
+        this.foto = foto; this.endereco = endereco;
+    }
+
+    public int getId() { return id; } public void setId(int id) { this.id = id; }
+    public String getNome() { return nome; } public void setNome(String nome) { this.nome = nome; }
+    public String getCpf() { return cpf; } public void setCpf(String cpf) { this.cpf = cpf; }
+    public LocalDate getDataNascimento() { return dataNascimento; } public void setDataNascimento(LocalDate dataNascimento) { this.dataNascimento = dataNascimento; }
+    public String getSexo() { return sexo; } public void setSexo(String sexo) { this.sexo = sexo; }
+    public String getCartaoSus() { return cartaoSus; } public void setCartaoSus(String cartaoSus) { this.cartaoSus = cartaoSus; }
+    public String getTelefone() { return telefone; } public void setTelefone(String telefone) { this.telefone = telefone; }
+    public String getTelefone2() { return telefone2; } public void setTelefone2(String telefone2) { this.telefone2 = telefone2; }
+    public String getAlergias() { return alergias; } public void setAlergias(String alergias) { this.alergias = alergias; }
+    public String getMedicoEncaminhador() { return medicoEncaminhador; } public void setMedicoEncaminhador(String medicoEncaminhador) { this.medicoEncaminhador = medicoEncaminhador; }
+    public String getNomeResponsavel() { return nomeResponsavel; } public void setNomeResponsavel(String nomeResponsavel) { this.nomeResponsavel = nomeResponsavel; }
+    public String getCpfResponsavel() { return cpfResponsavel; } public void setCpfResponsavel(String cpfResponsavel) { this.cpfResponsavel = cpfResponsavel; }
+    public byte[] getFoto() { return foto; } public void setFoto(byte[] foto) { this.foto = foto; }
+    public Endereco getEndereco() { return endereco; } public void setEndereco(Endereco endereco) { this.endereco = endereco; }
 }

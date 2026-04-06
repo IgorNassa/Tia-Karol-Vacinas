@@ -2,17 +2,17 @@ package br.sistema.view.components;
 
 import br.sistema.util.Cores;
 import br.sistema.view.TelaPrincipal;
-import br.sistema.view.panels.PainelDashboard;
-import br.sistema.view.panels.PainelFormulario;
+import br.sistema.view.panels.*;
+import com.formdev.flatlaf.extras.FlatSVGIcon;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.image.BufferedImage;
 
 public class Sidebar extends JPanel {
-    private TelaPrincipal frame; // Referência à janela mãe para trocar as telas
+    private TelaPrincipal frame;
 
     public Sidebar(TelaPrincipal frame) {
         this.frame = frame;
@@ -36,14 +36,21 @@ public class Sidebar extends JPanel {
             add(fall);
         }
 
-        add(criarBotaoMenu("Dashboard", "icon_dashboard.png"));
+        // Mapeamento dos SVGs e criação dos botões
+        add(criarBotaoMenu("Home", "casa.svg"));
         add(Box.createVerticalStrut(5));
-        add(criarBotaoMenu("Pacientes", "icon_paciente.png"));
+        add(criarBotaoMenu("Painel de Aplicações", "vacinas.svg"));
         add(Box.createVerticalStrut(5));
-        add(criarBotaoMenu("Estoque", "icon_estoque.png"));
+        add(criarBotaoMenu("Pacientes", "member-list.svg"));
+        add(Box.createVerticalStrut(5));
+        add(criarBotaoMenu("Estoque", "frigorifico.svg"));
+        add(Box.createVerticalStrut(5));
+        add(criarBotaoMenu("Financeiro", "usd-circle.svg"));
+        add(Box.createVerticalStrut(5));
+        add(criarBotaoMenu("Configurações", "configuracoes.svg")); // Ou engrenagem.svg
     }
 
-    private JButton criarBotaoMenu(String texto, String icone) {
+    private JButton criarBotaoMenu(String texto, String arquivoSvg) {
         JButton btn = new JButton(texto);
         btn.setMaximumSize(new Dimension(260, 55));
         btn.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -57,42 +64,57 @@ public class Sidebar extends JPanel {
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btn.setOpaque(false);
 
-        try {
-            ImageIcon icon = new ImageIcon(getClass().getResource("/icons/" + icone));
-            btn.setIcon(new ImageIcon(icon.getImage().getScaledInstance(26, 26, Image.SCALE_SMOOTH)));
-        } catch (Exception e) {
-            btn.setIcon(new ImageIcon(new BufferedImage(26, 26, BufferedImage.TYPE_INT_ARGB)));
+        // Carrega o SVG e aplica cor Branca padrão
+        FlatSVGIcon iconOriginal = new FlatSVGIcon("icons/" + arquivoSvg, 24, 24);
+        if (iconOriginal != null) {
+            iconOriginal.setColorFilter(new FlatSVGIcon.ColorFilter(color -> Color.WHITE));
+            btn.setIcon(iconOriginal);
         }
         btn.setIconTextGap(20);
 
+        // Efeito visual de Hover
         btn.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
                 btn.setOpaque(true);
-                btn.setBackground(new Color(241, 160, 140, 105));
-                btn.setForeground(Color.WHITE);
+                btn.setBackground(new Color(248, 178, 161, 121));
+                btn.setForeground(Cores.VERDE_AQUA);
+                if (iconOriginal != null) iconOriginal.setColorFilter(new FlatSVGIcon.ColorFilter(color -> Cores.VERDE_AQUA));
             }
             @Override
             public void mouseExited(MouseEvent e) {
                 btn.setOpaque(false);
                 btn.setForeground(Color.WHITE);
                 btn.setBackground(new Color(255, 255, 255, 0));
+                if (iconOriginal != null) iconOriginal.setColorFilter(new FlatSVGIcon.ColorFilter(color -> Color.WHITE));
             }
         });
 
+        // ROTEADOR DE TELAS (Aqui está o segredo!)
         btn.addActionListener(e -> {
-            if (texto.equals("Dashboard")) frame.trocarTelaCentral(new PainelDashboard(frame));
-            // Outras telas no futuro
+            if (texto.equals("Home")) {
+                frame.trocarTelaCentral(new PainelDashboard(frame));
+            } else if (texto.equals("Painel de Aplicações")) {
+                frame.trocarTelaCentral(new PainelAplicacoes(frame));
+            } else if (texto.equals("Pacientes")) {
+                frame.trocarTelaCentral(new PainelPacientes(frame));
+            } else if (texto.equals("Estoque")) {
+                frame.trocarTelaCentral(new PainelEstoque(frame));
+            } else if (texto.equals("Financeiro")) {
+                frame.trocarTelaCentral(new PainelFinanceiro(frame));
+            } else if (texto.equals("Configurações")) {
+                frame.trocarTelaCentral(new PainelConfiguracoes(frame));
+            }
         });
 
-        return btn;
+        return btn; // Faltava retornar o botão para o painel!
     }
 
     @Override
     protected void paintComponent(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setColor(Cores.ROSA_KAROL);
+        g2.setColor( new Color(248, 178, 161));
         g2.fillRect(0, 0, getWidth(), getHeight());
 
         GradientPaint shadow = new GradientPaint(getWidth() - 10, 0, new Color(0,0,0,0), getWidth(), 0, new Color(0,0,0,25));
