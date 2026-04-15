@@ -43,8 +43,11 @@ public class PainelFormularioPaciente extends JPanel {
     private JTextField txtAlergias;
     private JTextField txtMedicoEncaminhador;
 
+    // RESPONSÁVEIS ATUALIZADOS
     private JTextField txtNomeResponsavel;
     private JFormattedTextField txtCpfResponsavel;
+    private JTextField txtNomeResponsavel2;
+    private JFormattedTextField txtCpfResponsavel2;
 
     private JFormattedTextField txtCep;
     private JTextField txtRua, txtNumero, txtComplemento, txtBairro, txtCidade, txtUf;
@@ -112,13 +115,12 @@ public class PainelFormularioPaciente extends JPanel {
     }
 
     private void preencherDadosParaEdicao() {
-        // DETECÇÃO INTELIGENTE DE ESTRANGEIRO ANTES DE PREENCHER OS DADOS
         boolean isEst = false;
         if (pacienteEmEdicao.getTelefone() != null && pacienteEmEdicao.getTelefone().startsWith("+")) isEst = true;
         if (pacienteEmEdicao.getCpf() != null && !pacienteEmEdicao.getCpf().isEmpty() && !pacienteEmEdicao.getCpf().matches("\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}")) isEst = true;
 
         chkEstrangeiro.setSelected(isEst);
-        atualizarObrigatoriedadesEstrangeiro(); // Já desliga as máscaras de telefone se precisar
+        atualizarObrigatoriedadesEstrangeiro();
 
         txtNome.setText(pacienteEmEdicao.getNome());
         txtCpf.setText(pacienteEmEdicao.getCpf());
@@ -132,8 +134,11 @@ public class PainelFormularioPaciente extends JPanel {
         txtMedicoEncaminhador.setText(pacienteEmEdicao.getMedicoEncaminhador());
         txtAlergias.setText(pacienteEmEdicao.getAlergias());
 
+        // CARREGA RESPONSÁVEIS
         txtNomeResponsavel.setText(pacienteEmEdicao.getNomeResponsavel());
         txtCpfResponsavel.setText(pacienteEmEdicao.getCpfResponsavel());
+        txtNomeResponsavel2.setText(pacienteEmEdicao.getNomeResponsavel2());
+        txtCpfResponsavel2.setText(pacienteEmEdicao.getCpfResponsavel2());
 
         Endereco end = pacienteEmEdicao.getEndereco();
         if (end != null) {
@@ -224,12 +229,26 @@ public class PainelFormularioPaciente extends JPanel {
 
     private JPanel criarAbaResponsavel() {
         JPanel pnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 20)); pnl.setOpaque(false); pnl.setBorder(new EmptyBorder(10, 0, 0, 0));
-        JPanel grid = new JPanel(new GridLayout(2, 1, 0, 25)); grid.setOpaque(false); grid.setPreferredSize(new Dimension(550, 160));
-        txtNomeResponsavel = criarCampoTexto("Nome da Mãe, Pai ou Responsável");
+
+        // Aumentei o Grid para suportar 4 campos em vez de 2
+        JPanel grid = new JPanel(new GridLayout(4, 1, 0, 15)); grid.setOpaque(false); grid.setPreferredSize(new Dimension(550, 300));
+
+        txtNomeResponsavel = criarCampoTexto("Mãe, Pai ou Responsável Principal");
         aplicarCapitalizacao(txtNomeResponsavel);
-        adicionarValidacaoTempoReal(txtNomeResponsavel, false, "TEXTO"); grid.add(montarBloco("NOME DO RESPONSÁVEL", txtNomeResponsavel));
+        adicionarValidacaoTempoReal(txtNomeResponsavel, false, "TEXTO");
+        grid.add(montarBloco("NOME DO RESPONSÁVEL 1", txtNomeResponsavel));
+
         txtCpfResponsavel = new JFormattedTextField(); aplicarMascara(txtCpfResponsavel, "###.###.###-##"); configurarCampoFormatado(txtCpfResponsavel); adicionarValidacaoTempoReal(txtCpfResponsavel, false, "CPF");
-        grid.add(montarBloco("CPF DO RESPONSÁVEL", txtCpfResponsavel));
+        grid.add(montarBloco("CPF DO RESPONSÁVEL 1", txtCpfResponsavel));
+
+        // NOVOS CAMPOS DO RESPONSÁVEL 2
+        txtNomeResponsavel2 = criarCampoTexto("2º Responsável (Opcional)");
+        aplicarCapitalizacao(txtNomeResponsavel2);
+        grid.add(montarBloco("NOME DO RESPONSÁVEL 2 (OPCIONAL)", txtNomeResponsavel2));
+
+        txtCpfResponsavel2 = new JFormattedTextField(); aplicarMascara(txtCpfResponsavel2, "###.###.###-##"); configurarCampoFormatado(txtCpfResponsavel2); adicionarValidacaoTempoReal(txtCpfResponsavel2, false, "CPF");
+        grid.add(montarBloco("CPF DO RESPONSÁVEL 2", txtCpfResponsavel2));
+
         pnl.add(grid); return pnl;
     }
 
@@ -252,10 +271,6 @@ public class PainelFormularioPaciente extends JPanel {
         txtUf = criarCampoTexto("UF"); txtUf.setPreferredSize(new Dimension(200, 45)); linha3.add(montarBloco("ESTADO (UF)", txtUf));
         grid.add(linha3); pnl.add(grid, BorderLayout.NORTH); return pnl;
     }
-
-    // =========================================================
-    // LÓGICAS INTELIGENTES (CAPITALIZAÇÃO E ESTRANGEIRO)
-    // =========================================================
 
     private void aplicarCapitalizacao(JTextField campo) {
         campo.addFocusListener(new FocusAdapter() {
@@ -285,12 +300,10 @@ public class PainelFormularioPaciente extends JPanel {
         JLabel lblCpf = mapLabels.get(txtCpf);
 
         if (est) {
-            // Opcionais
             if (lblCep != null) { lblCep.setText("ZIP CODE (OPCIONAL)"); txtCep.putClientProperty("tituloOriginal", "ZIP CODE (OPCIONAL)"); setErroComponente(txtCep, false, null); }
             if (lblNum != null) { lblNum.setText("NÚMERO (OPCIONAL)"); txtNumero.putClientProperty("tituloOriginal", "NÚMERO (OPCIONAL)"); setErroComponente(txtNumero, false, null); }
             if (lblCpf != null && !isMenorDeIdade) { lblCpf.setText("PASSAPORTE / ID"); txtCpf.putClientProperty("tituloOriginal", "PASSAPORTE / ID"); setErroComponente(txtCpf, false, null); }
 
-            // REMOVE MÁSCARAS
             txtTelefone.setFormatterFactory(null);
             txtTelefone.putClientProperty("JTextField.placeholderText", "Ex: +54 9 11 1234...");
             if(limparMascara(txtTelefone.getText()).isEmpty()) txtTelefone.setText("");
@@ -304,7 +317,6 @@ public class PainelFormularioPaciente extends JPanel {
             if (lblCep != null) { lblCep.setText("CEP *"); txtCep.putClientProperty("tituloOriginal", "CEP *"); validarCampo(txtCep, true, "CEP"); }
             if (lblNum != null) { lblNum.setText("NÚMERO *"); txtNumero.putClientProperty("tituloOriginal", "NÚMERO *"); validarCampo(txtNumero, true, "TEXTO"); }
 
-            // RESTAURA MÁSCARAS
             aplicarMascara(txtTelefone, "(##) #####-####");
             txtTelefone.putClientProperty("JTextField.placeholderText", "");
             if(limparMascara(txtTelefone.getText()).isEmpty()) txtTelefone.setText("");
@@ -367,7 +379,6 @@ public class PainelFormularioPaciente extends JPanel {
         } catch (Exception e) { return false; }
     }
 
-    // A validação agora conta todos os números digitados (ótimo para números internacionais livres)
     private boolean isTelefoneValido(String tel) {
         String num = tel.replaceAll("[^0-9]", "");
         return num.length() >= 10;
@@ -449,6 +460,7 @@ public class PainelFormularioPaciente extends JPanel {
         valid &= validarCampo(txtNumero, !est, "TEXTO");
 
         valid &= validarCampo(txtCpfResponsavel, false, "CPF");
+        valid &= validarCampo(txtCpfResponsavel2, false, "CPF"); // Adicionado Validação
 
         if (!isMenorDeIdade && !est) {
             valid &= validarCampo(txtCpf, true, "CPF");
@@ -465,7 +477,24 @@ public class PainelFormularioPaciente extends JPanel {
         Endereco endereco = new Endereco(txtCep.getText(), txtRua.getText().trim(), txtNumero.getText().trim(), txtComplemento.getText().trim(), txtBairro.getText().trim(), txtCidade.getText().trim(), txtUf.getText().trim(), codigoIbge);
         String sexoSel = cbSexo.getSelectedIndex() == 0 ? "" : cbSexo.getSelectedItem().toString();
 
-        Paciente pacienteAtualizado = new Paciente(txtNome.getText().trim(), txtCpf.getText(), dataNasc, sexoSel, txtCartaoSus.getText().trim(), txtTelefone.getText(), txtTelefone2.getText(), txtAlergias.getText().trim(), txtMedicoEncaminhador.getText().trim(), txtNomeResponsavel.getText().trim(), txtCpfResponsavel.getText(), fotoBytes, endereco);
+        // O NOVO CONSTRUTOR AQUI!
+        Paciente pacienteAtualizado = new Paciente(
+                txtNome.getText().trim(),
+                txtCpf.getText(),
+                dataNasc,
+                sexoSel,
+                txtCartaoSus.getText().trim(),
+                txtTelefone.getText(),
+                txtTelefone2.getText(),
+                txtAlergias.getText().trim(),
+                txtMedicoEncaminhador.getText().trim(),
+                txtNomeResponsavel.getText().trim(),
+                txtCpfResponsavel.getText(),
+                txtNomeResponsavel2.getText().trim(),
+                txtCpfResponsavel2.getText(),
+                fotoBytes,
+                endereco
+        );
 
         if (pacienteEmEdicao == null) {
             new PacienteDAO().salvar(pacienteAtualizado);
@@ -500,7 +529,6 @@ public class PainelFormularioPaciente extends JPanel {
     private void trocarAba(String aba, JButton btnAtivo) { cardLayout.show(pnlCards, aba); JButton[] botoes = {btnNavPessoais, btnNavResponsavel, btnNavEndereco}; for (JButton b : botoes) { b.setFont(new Font("Segoe UI", Font.PLAIN, 16)); b.setForeground(Cores.CINZA_LABEL); } btnAtivo.setFont(new Font("Segoe UI", Font.BOLD, 16)); btnAtivo.setForeground(Cores.VERDE_AQUA); }
     private FlatSVGIcon carregarIcone(String nomeArquivo, int tamanho, Color cor) { try { java.net.URL imgURL = getClass().getResource("/icons/" + nomeArquivo); if (imgURL != null) return (FlatSVGIcon) new FlatSVGIcon(imgURL).derive(tamanho, tamanho).setColorFilter(new FlatSVGIcon.ColorFilter(c -> cor)); return (FlatSVGIcon) new FlatSVGIcon("icons/" + nomeArquivo, tamanho, tamanho).setColorFilter(new FlatSVGIcon.ColorFilter(c -> cor)); } catch (Exception e) { return null; } }
 
-    // ATUALIZADO: Agora usa setFormatterFactory que é muito mais seguro para ligar/desligar máscaras dinamicamente
     private void aplicarMascara(JFormattedTextField campo, String formato) {
         try {
             MaskFormatter mask = new MaskFormatter(formato);

@@ -1,6 +1,7 @@
 package br.sistema.view.panels;
 
 import br.sistema.model.Vacina;
+import br.sistema.repository.AplicacaoDAO;
 import br.sistema.repository.VacinaDAO;
 import br.sistema.util.Cores;
 import br.sistema.view.TelaPrincipal;
@@ -26,6 +27,7 @@ public class PainelEstoque extends JPanel {
     private JTable tabela;
     private DefaultTableModel modeloTabela;
     private VacinaDAO dao;
+    private AplicacaoDAO aplicacaoDAO; // Novo
     private List<Vacina> listaVacinas;
     private int hoveredRow = -1;
 
@@ -35,13 +37,13 @@ public class PainelEstoque extends JPanel {
     public PainelEstoque(TelaPrincipal frame) {
         this.frame = frame;
         this.dao = new VacinaDAO();
+        this.aplicacaoDAO = new AplicacaoDAO();
         setOpaque(false); setLayout(new BorderLayout(0, 20));
         setBorder(new EmptyBorder(30, 40, 30, 40));
 
         GlassPanel cardVidro = new GlassPanel();
         cardVidro.setLayout(new BorderLayout(0, 15)); cardVidro.setBorder(new EmptyBorder(25, 35, 30, 35));
 
-        // HEADER
         JPanel header = new JPanel(new BorderLayout(20, 0)); header.setOpaque(false);
         JLabel titulo = new JLabel("Estoque e Lotes");
         titulo.setFont(new Font("Segoe UI Semilight", Font.PLAIN, 32)); titulo.setForeground(Cores.CINZA_GRAFITE);
@@ -55,18 +57,16 @@ public class PainelEstoque extends JPanel {
         btnNovo.addActionListener(e -> abrirModalFormulario(null, false));
         header.add(btnNovo, BorderLayout.EAST); cardVidro.add(header, BorderLayout.NORTH);
 
-        // KPIs
         JPanel pnlKpis = new JPanel(new GridLayout(1, 3, 20, 0)); pnlKpis.setOpaque(false); pnlKpis.setPreferredSize(new Dimension(0, 80));
         lblTotalDoses = new JLabel("0"); lblLotesAlerta = new JLabel("0"); lblCapital = new JLabel("R$ 0,00");
-        pnlKpis.add(criarKpiCard("Doses Disponíveis", lblTotalDoses, Cores.VERDE_AQUA));
-        pnlKpis.add(criarKpiCard("Lotes em Baixo Estoque", lblLotesAlerta, new Color(230, 126, 34)));
+        pnlKpis.add(criarKpiCard("Doses P/ Venda", lblTotalDoses, Cores.VERDE_AQUA));
+        pnlKpis.add(criarKpiCard("Lotes em Alerta", lblLotesAlerta, new Color(230, 126, 34)));
         pnlKpis.add(criarKpiCard("Capital Imobilizado", lblCapital, Cores.ROSA_KAROL));
 
         JPanel pnlCentro = new JPanel(new BorderLayout(0, 20)); pnlCentro.setOpaque(false);
         pnlCentro.add(pnlKpis, BorderLayout.NORTH);
 
-        // TABELA
-        String[] colunas = {"ID", "Vacina", "Laboratório", "Lote", "Validade", "Disponível"};
+        String[] colunas = {"ID", "Vacina", "Laboratório", "Lote", "Validade", "Disponível (Venda)", "Reservadas", "Físico (Geladeira)"};
         modeloTabela = new DefaultTableModel(new Object[][]{}, colunas) { public boolean isCellEditable(int row, int column) { return false; } };
         tabela = new JTable(modeloTabela); tabela.setRowHeight(50); tabela.setShowVerticalLines(false); tabela.setShowHorizontalLines(false); tabela.setIntercellSpacing(new Dimension(0, 5)); tabela.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
@@ -91,21 +91,40 @@ public class PainelEstoque extends JPanel {
         carregarDadosTabela();
     }
 
+    private void carregarDadosTabela() {
+        modeloTabela.setRowCount(0); listaVacinas = dao.listarTodas();
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        int totalDosesVenda = 0; int lotesAlerta = 0; double capital = 0.0;
+
+        for (Vacina v : listaVacinas) {
+            // A LÓGICA PERFEITA:
+            int fisicoGeladeira = v.getQtdDisponivel(); // O que tem no banco é a geladeira
+            int reservadas = aplicacaoDAO.buscarQuantidadeReservada(v.getId());
+            int disponivelVenda = fisicoGeladeira - reservadas;
+
+            String val = v.getValidade() != null ? v.getValidade().format(fmt) : "N/A";
+            modeloTabela.addRow(new Object[]{
+                    String.format("%03d", v.getId()), v.getNomeVacina(), v.getLaboratorio(), v.getLote(), val,
+                    String.valueOf(disponivelVenda),      // Venda Livre
+                    String.valueOf(reservadas),           // Reservadas
+                    String.valueOf(fisicoGeladeira)       // Na Geladeira Físicamente
+            });
+
+            totalDosesVenda += disponivelVenda;
+            if (disponivelVenda <= 5 && disponivelVenda > 0) lotesAlerta++;
+            capital += (fisicoGeladeira * v.getValorCompra()); // Capital conta o que está fisicamente lá
+        }
+        lblTotalDoses.setText(String.valueOf(totalDosesVenda)); lblLotesAlerta.setText(String.valueOf(lotesAlerta)); lblCapital.setText(String.format("R$ %.2f", capital));
+        hoveredRow = -1;
+    }
+
     private JPopupMenu criarMenuOpcoes() {
         JPopupMenu popup = new JPopupMenu();
-
-        // --- SOFISTICAÇÃO DA CAIXA DO MENU ---
-        // Borda suave, levemente arredondada (se o FlatLaf permitir) com uma sombra sutil (padding)
-        popup.setBorder(BorderFactory.createCompoundBorder(
-                new LineBorder(new Color(230, 235, 240), 1, true),
-                new EmptyBorder(10, 5, 10, 5) // Mais "respiro" no topo e embaixo
-        ));
-
-        // Define cor de fundo limpa para a caixa principal
+        popup.setBorder(BorderFactory.createCompoundBorder(new LineBorder(new Color(230, 235, 240), 1, true), new EmptyBorder(10, 5, 10, 5)));
         popup.setBackground(Color.WHITE);
 
         JMenuItem itemNovoLote = criarItemMenu("Adicionar Novo Lote...", "adicionar.svg", new Color(46, 204, 113));
-        JMenuItem itemEditar = criarItemMenu("Editar este Lote", "lapis-de-blog.svg", Cores.CINZA_GRAFITE); // Cinza Grafite fica mais elegante na edição
+        JMenuItem itemEditar = criarItemMenu("Editar este Lote", "lapis-de-blog.svg", Cores.CINZA_GRAFITE);
         JMenuItem itemDescarte = criarItemMenu("Registrar Perda/Descarte", "aviso.svg", new Color(230, 126, 34));
         JMenuItem itemExcluir = criarItemMenu("Excluir Lote (Erro digitação)", "trash.svg", new Color(220, 53, 69));
 
@@ -114,26 +133,16 @@ public class PainelEstoque extends JPanel {
         itemDescarte.addActionListener(e -> { int l = tabela.getSelectedRow(); if (l >= 0) abrirModalDescarte(buscarVacinaPorIdNaLista(Integer.parseInt((String) tabela.getValueAt(l, 0)))); });
         itemExcluir.addActionListener(e -> {
             int l = tabela.getSelectedRow();
-            if (l >= 0 && JOptionPane.showConfirmDialog(frame, "CUIDADO: Use isso apenas para erros de digitação!\n\nSe a vacina quebrou ou venceu, use 'Registrar Perda/Descarte'.\nDeseja excluir permanentemente do banco?", "Atenção", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
+            if (l >= 0 && JOptionPane.showConfirmDialog(frame, "CUIDADO: Use isso apenas para erros de digitação!\nDeseja excluir permanentemente do banco?", "Atenção", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
                 dao.excluir(Integer.parseInt((String) tabela.getValueAt(l, 0))); carregarDadosTabela();
             }
         });
 
-        popup.add(itemNovoLote);
-
-        // Separador customizado (mais discreto)
-        JSeparator sep1 = new JSeparator(); sep1.setForeground(new Color(240,240,240)); popup.add(sep1);
-
-        popup.add(itemEditar);
-
-        JSeparator sep2 = new JSeparator(); sep2.setForeground(new Color(240,240,240)); popup.add(sep2);
-
-        popup.add(itemDescarte);
-        popup.add(itemExcluir);
-
+        popup.add(itemNovoLote); JSeparator sep1 = new JSeparator(); sep1.setForeground(new Color(240,240,240)); popup.add(sep1);
+        popup.add(itemEditar); JSeparator sep2 = new JSeparator(); sep2.setForeground(new Color(240,240,240)); popup.add(sep2);
+        popup.add(itemDescarte); popup.add(itemExcluir);
         return popup;
     }
-
 
     private void abrirModalDescarte(Vacina v) {
         if(v.getQtdDisponivel() <= 0) { JOptionPane.showMessageDialog(frame, "Este lote já está zerado.", "Aviso", JOptionPane.INFORMATION_MESSAGE); return; }
@@ -154,15 +163,12 @@ public class PainelEstoque extends JPanel {
 
         btnConfirmar.addActionListener(e -> {
             int perdidos = (int) spQtd.getValue();
-
-            // DUPLA CERTIFICAÇÃO DE SEGURANÇA
             int opt1 = JOptionPane.showConfirmDialog(dialog, "ATENÇÃO: Você está prestes a remover " + perdidos + " dose(s) do estoque físico.\nDeseja continuar?", "1ª Confirmação de Baixa", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
             if(opt1 == JOptionPane.YES_OPTION) {
                 int opt2 = JOptionPane.showConfirmDialog(dialog, "CONFIRMAÇÃO FINAL:\nTem certeza absoluta que deseja descartar estas vacinas permanentemente?", "2ª Confirmação de Baixa", JOptionPane.YES_NO_OPTION, JOptionPane.ERROR_MESSAGE);
                 if(opt2 == JOptionPane.YES_OPTION) {
                     v.setQtdDisponivel(v.getQtdDisponivel() - perdidos);
-                    dao.atualizar(v); // Dá baixa apenas no estoque
-
+                    dao.atualizar(v);
                     JOptionPane.showMessageDialog(dialog, "Baixa de estoque registrada com sucesso.", "Estoque Atualizado", JOptionPane.INFORMATION_MESSAGE);
                     dialog.dispose(); carregarDadosTabela();
                 }
@@ -171,20 +177,6 @@ public class PainelEstoque extends JPanel {
 
         JPanel pnlFooter = new JPanel(new BorderLayout()); pnlFooter.setBackground(Color.WHITE); pnlFooter.setBorder(new EmptyBorder(0, 30, 20, 30)); pnlFooter.add(btnConfirmar, BorderLayout.CENTER);
         dialog.add(pnl, BorderLayout.CENTER); dialog.add(pnlFooter, BorderLayout.SOUTH); dialog.setVisible(true);
-    }
-
-    private void carregarDadosTabela() {
-        modeloTabela.setRowCount(0); listaVacinas = dao.listarTodas();
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-        int totalDoses = 0; int lotesAlerta = 0; double capital = 0.0;
-
-        for (Vacina v : listaVacinas) {
-            String val = v.getValidade() != null ? v.getValidade().format(fmt) : "N/A";
-            modeloTabela.addRow(new Object[]{ String.format("%03d", v.getId()), v.getNomeVacina(), v.getLaboratorio(), v.getLote(), val, String.valueOf(v.getQtdDisponivel()) });
-            totalDoses += v.getQtdDisponivel(); if (v.getQtdDisponivel() <= 5 && v.getQtdDisponivel() > 0) lotesAlerta++; capital += (v.getQtdDisponivel() * v.getValorCompra());
-        }
-        lblTotalDoses.setText(String.valueOf(totalDoses)); lblLotesAlerta.setText(String.valueOf(lotesAlerta)); lblCapital.setText(String.format("R$ %.2f", capital));
-        hoveredRow = -1;
     }
 
     private Vacina buscarVacinaPorIdNaLista(int id) { for (Vacina v : listaVacinas) { if (v.getId() == id) return v; } return null; }
@@ -232,13 +224,8 @@ public class PainelEstoque extends JPanel {
         btnSalvar.addActionListener(e -> {
             try {
                 if (txtNome.getText().trim().isEmpty() || txtLote.getText().trim().isEmpty() || txtValidade.getText().replaceAll("[^0-9]", "").length() != 8) { JOptionPane.showMessageDialog(dialog, "Nome, Lote e Validade são obrigatórios.", "Aviso", JOptionPane.WARNING_MESSAGE); return; }
-
-                // VALIDAÇÃO DE DATA BLOQUEADORA
                 LocalDate val = LocalDate.parse(txtValidade.getText(), DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                if (val.isBefore(LocalDate.now())) {
-                    JOptionPane.showMessageDialog(dialog, "A data de validade informada já passou (menor que hoje).\nNão é permitido cadastrar lotes vencidos.", "Data Inválida", JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
+                if (val.isBefore(LocalDate.now())) { JOptionPane.showMessageDialog(dialog, "A data de validade informada já passou.\nNão é permitido cadastrar lotes vencidos.", "Data Inválida", JOptionPane.ERROR_MESSAGE); return; }
 
                 double compra = Double.parseDouble(txtCompra.getText().replace(".", "").replace(",", ".")); double venda = Double.parseDouble(txtVenda.getText().replace(".", "").replace(",", "."));
                 Vacina v = new Vacina(); v.setNomeVacina(txtNome.getText().trim()); v.setTipo(cbTipo.getSelectedItem().toString()); v.setLaboratorio(txtLab.getText().trim()); v.setLote(txtLote.getText().trim()); v.setValidade(val); v.setValorCompra(compra); v.setValorVenda(venda); v.setObservacoes(txtObs.getText().trim()); int qtd = (int) spQuantidade.getValue(); v.setQtdDisponivel(qtd);
@@ -256,9 +243,6 @@ public class PainelEstoque extends JPanel {
         campo.addFocusListener(new FocusAdapter() { public void focusGained(FocusEvent e) { if(campo.getText().equals("0,00")) campo.setText(""); } });
     }
 
-    // =========================================================
-    // VALIDADOR EM LINHA (Fica vermelho se data for antiga)
-    // =========================================================
     private void adicionarValidacaoDataInline(JTextField campo) {
         campo.addKeyListener(new KeyAdapter() {
             public void keyReleased(KeyEvent e) {
@@ -266,111 +250,37 @@ public class PainelEstoque extends JPanel {
                 if (nums.length() == 8) {
                     try {
                         LocalDate dataDigitada = LocalDate.parse(campo.getText(), DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                        // Regra principal: Vencimento não pode ser menor que hoje!
-                        if (dataDigitada.isBefore(LocalDate.now())) {
-                            setErroComponente(campo, true, "Data Vencida!");
-                        } else {
-                            setErroComponente(campo, false, null);
-                        }
-                    } catch (Exception ex) {
-                        setErroComponente(campo, true, "Inválida");
-                    }
-                } else if (nums.length() > 0) {
-                    setErroComponente(campo, true, "Incompleta");
-                }
+                        if (dataDigitada.isBefore(LocalDate.now())) setErroComponente(campo, true, "Data Vencida!"); else setErroComponente(campo, false, null);
+                    } catch (Exception ex) { setErroComponente(campo, true, "Inválida"); }
+                } else if (nums.length() > 0) { setErroComponente(campo, true, "Incompleta"); }
             }
         });
     }
 
-    // =========================================================
-    // CARDS KPI ARREDONDADOS E MODERNOS
-    // =========================================================
     private JPanel criarKpiCard(String titulo, JLabel lblValor, Color corBorda) {
         JPanel pnl = new JPanel(new BorderLayout()) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                // Suaviza as bordas (Anti-aliasing)
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                // Pinta o fundo branco arredondado
-                g2.setColor(Color.WHITE);
-                g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 25, 25);
-
-                // Desenha a borda colorida por cima
-                g2.setColor(corBorda);
-                g2.setStroke(new BasicStroke(2f));
-                g2.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 25, 25);
-
-                g2.dispose();
+            @Override protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(Color.WHITE); g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 25, 25);
+                g2.setColor(corBorda); g2.setStroke(new BasicStroke(2f)); g2.drawRoundRect(1, 1, getWidth() - 3, getHeight() - 3, 25, 25); g2.dispose();
             }
         };
-
-        pnl.setOpaque(false); // Transparente para não mostrar o quadrado cinza atrás
-        pnl.setBorder(new EmptyBorder(15, 20, 15, 20)); // Respiro interno generoso
-
-        JLabel lblT = new JLabel(titulo);
-        lblT.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        lblT.setForeground(Cores.CINZA_LABEL);
-
-        lblValor.setFont(new Font("Segoe UI", Font.BOLD, 26));
-        lblValor.setForeground(Cores.CINZA_GRAFITE);
-
-        pnl.add(lblT, BorderLayout.NORTH);
-        pnl.add(lblValor, BorderLayout.CENTER);
-
-        return pnl;
+        pnl.setOpaque(false); pnl.setBorder(new EmptyBorder(15, 20, 15, 20));
+        JLabel lblT = new JLabel(titulo); lblT.setFont(new Font("Segoe UI", Font.BOLD, 13)); lblT.setForeground(Cores.CINZA_LABEL);
+        lblValor.setFont(new Font("Segoe UI", Font.BOLD, 26)); lblValor.setForeground(Cores.CINZA_GRAFITE);
+        pnl.add(lblT, BorderLayout.NORTH); pnl.add(lblValor, BorderLayout.CENTER); return pnl;
     }
 
-    private String toHex(Color color) {
-        return String.format("#%02x%02x%02x",
-                color.getRed(),
-                color.getGreen(),
-                color.getBlue());
-    }
+    private String toHex(Color color) { return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue()); }
 
     private JMenuItem criarItemMenu(String texto, String arquivoSvg, Color corAcao) {
-        JMenuItem item = new JMenuItem(texto);
-
-        // Fonte um pouco mais fina (PLAIN) fica mais moderna do que o BOLD pesado
-        item.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-
-        // --- SOFISTICAÇÃO DO ITEM ---
-        // Muito mais espaço lateral e interno
-        item.setBorder(new EmptyBorder(10, 20, 10, 30));
-        item.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        item.setForeground(Cores.CINZA_GRAFITE); // Texto normal em cinza escuro é padrão de design
-        item.setBackground(Color.WHITE);
-        item.setOpaque(true);
-
+        JMenuItem item = new JMenuItem(texto); item.setFont(new Font("Segoe UI", Font.PLAIN, 14)); item.setBorder(new EmptyBorder(10, 20, 10, 30)); item.setCursor(new Cursor(Cursor.HAND_CURSOR)); item.setForeground(Cores.CINZA_GRAFITE); item.setBackground(Color.WHITE); item.setOpaque(true);
         String corHex = toHex(corAcao);
-
-        // 💥 O SEGREDO DO FLATLAF: Fundo "Fade" (pastel) e bordas arredondadas (arc)
-        item.putClientProperty("FlatLaf.style", ""
-                + "selectionBackground: fade(" + corHex + ", 12%);" // Fundo com 12% da cor (tom pastel lindíssimo)
-                + "selectionArc: 10;"                               // Arredonda as pontas da seleção
-                + "selectionForeground: " + corHex + ";"            // O texto muda para a cor da ação
-        );
-
+        item.putClientProperty("FlatLaf.style", "selectionBackground: fade(" + corHex + ", 12%); selectionArc: 10; selectionForeground: " + corHex + ";");
         try {
-            // No estado normal, ícone cinza grafite
-            FlatSVGIcon icon = carregarIcone(arquivoSvg, 18, Cores.CINZA_GRAFITE);
-            item.setIcon(icon);
-            item.setIconTextGap(15);
-
-            item.addChangeListener(e -> {
-                if (item.isArmed()) {
-                    // No Hover: Ícone pega a cor forte da ação (vermelho, verde...)
-                    icon.setColorFilter(new FlatSVGIcon.ColorFilter(c -> corAcao));
-                } else {
-                    // Fora do Hover: Ícone volta a ser cinza
-                    icon.setColorFilter(new FlatSVGIcon.ColorFilter(c -> Cores.CINZA_GRAFITE));
-                }
-            });
-
+            FlatSVGIcon icon = carregarIcone(arquivoSvg, 18, Cores.CINZA_GRAFITE); item.setIcon(icon); item.setIconTextGap(15);
+            item.addChangeListener(e -> { if (item.isArmed()) icon.setColorFilter(new FlatSVGIcon.ColorFilter(c -> corAcao)); else icon.setColorFilter(new FlatSVGIcon.ColorFilter(c -> Cores.CINZA_GRAFITE)); });
         } catch (Exception ignored) {}
-
         return item;
     }
 
@@ -384,9 +294,9 @@ public class PainelEstoque extends JPanel {
     private class CustomTableRenderer extends DefaultTableCellRenderer {
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column); setBorder(new EmptyBorder(0, 15, 0, 15));
-            int qtd = 0; try { Object val = table.getValueAt(row, 5); if(val != null && !val.toString().isEmpty()) qtd = Integer.parseInt(val.toString()); } catch (Exception ex) { qtd = 0; }
+            int qtdDisponivel = 0; try { Object val = table.getValueAt(row, 5); if(val != null && !val.toString().isEmpty()) qtdDisponivel = Integer.parseInt(val.toString()); } catch (Exception ex) { qtdDisponivel = 0; }
             if (isSelected) { c.setBackground(Cores.VERDE_AQUA); c.setForeground(Color.WHITE); } else if (row == hoveredRow) { c.setBackground(new Color(210, 235, 235)); c.setForeground(Cores.CINZA_GRAFITE); } else { c.setBackground(Color.WHITE); c.setForeground(Cores.CINZA_GRAFITE); }
-            if (!isSelected && qtd <= 5 && qtd > 0) { c.setForeground(new Color(230, 126, 34)); c.setFont(new Font("Segoe UI", Font.BOLD, 15)); } else if (!isSelected && qtd == 0) { c.setForeground(new Color(220, 53, 69)); c.setFont(new Font("Segoe UI", Font.BOLD, 15)); }
+            if (!isSelected && qtdDisponivel <= 5 && qtdDisponivel > 0) { c.setForeground(new Color(230, 126, 34)); c.setFont(new Font("Segoe UI", Font.BOLD, 15)); } else if (!isSelected && qtdDisponivel <= 0) { c.setForeground(new Color(220, 53, 69)); c.setFont(new Font("Segoe UI", Font.BOLD, 15)); }
             return c;
         }
     }

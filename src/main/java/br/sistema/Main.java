@@ -1,6 +1,7 @@
 package br.sistema;
 
 import br.sistema.repository.*;
+import br.sistema.util.DataSeeder;
 import br.sistema.view.TelaPrincipal;
 
 public class Main {

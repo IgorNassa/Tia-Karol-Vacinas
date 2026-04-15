@@ -12,11 +12,13 @@ public class Paciente {
     private String telefone;
     private String telefone2;
     private String alergias;
-    private String medicoEncaminhador; // <--- NOVO CAMPO
+    private String medicoEncaminhador;
 
-    // Responsável Legal
+    // Responsáveis Legais
     private String nomeResponsavel;
     private String cpfResponsavel;
+    private String nomeResponsavel2;
+    private String cpfResponsavel2;
 
     private byte[] foto;
     private Endereco endereco;
@@ -25,14 +27,17 @@ public class Paciente {
 
     public Paciente(String nome, String cpf, LocalDate dataNascimento, String sexo, String cartaoSus,
                     String telefone, String telefone2, String alergias, String medicoEncaminhador,
-                    String nomeResponsavel, String cpfResponsavel, byte[] foto, Endereco endereco) {
+                    String nomeResponsavel, String cpfResponsavel, String nomeResponsavel2, String cpfResponsavel2,
+                    byte[] foto, Endereco endereco) {
         this.nome = nome; this.cpf = cpf; this.dataNascimento = dataNascimento;
         this.sexo = sexo; this.cartaoSus = cartaoSus; this.telefone = telefone;
         this.telefone2 = telefone2; this.alergias = alergias; this.medicoEncaminhador = medicoEncaminhador;
         this.nomeResponsavel = nomeResponsavel; this.cpfResponsavel = cpfResponsavel;
+        this.nomeResponsavel2 = nomeResponsavel2; this.cpfResponsavel2 = cpfResponsavel2;
         this.foto = foto; this.endereco = endereco;
     }
 
+    // Getters e Setters Padrões
     public int getId() { return id; } public void setId(int id) { this.id = id; }
     public String getNome() { return nome; } public void setNome(String nome) { this.nome = nome; }
     public String getCpf() { return cpf; } public void setCpf(String cpf) { this.cpf = cpf; }
@@ -45,6 +50,8 @@ public class Paciente {
     public String getMedicoEncaminhador() { return medicoEncaminhador; } public void setMedicoEncaminhador(String medicoEncaminhador) { this.medicoEncaminhador = medicoEncaminhador; }
     public String getNomeResponsavel() { return nomeResponsavel; } public void setNomeResponsavel(String nomeResponsavel) { this.nomeResponsavel = nomeResponsavel; }
     public String getCpfResponsavel() { return cpfResponsavel; } public void setCpfResponsavel(String cpfResponsavel) { this.cpfResponsavel = cpfResponsavel; }
+    public String getNomeResponsavel2() { return nomeResponsavel2; } public void setNomeResponsavel2(String nomeResponsavel2) { this.nomeResponsavel2 = nomeResponsavel2; }
+    public String getCpfResponsavel2() { return cpfResponsavel2; } public void setCpfResponsavel2(String cpfResponsavel2) { this.cpfResponsavel2 = cpfResponsavel2; }
     public byte[] getFoto() { return foto; } public void setFoto(byte[] foto) { this.foto = foto; }
     public Endereco getEndereco() { return endereco; } public void setEndereco(Endereco endereco) { this.endereco = endereco; }
 }

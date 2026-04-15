@@ -9,156 +9,98 @@ import java.util.List;
 
 public class AplicacaoDAO {
 
-    public AplicacaoDAO() {
-        criarTabelaSeNaoExistir();
-    }
+    public AplicacaoDAO() { criarTabelaSeNaoExistir(); }
 
     private void criarTabelaSeNaoExistir() {
         String sql = "CREATE TABLE IF NOT EXISTS aplicacoes_v2 ("
-                + "id SERIAL PRIMARY KEY,"
-                + "paciente_id INTEGER NOT NULL,"
-                + "vacina_id INTEGER NOT NULL,"
-                + "data_hora TIMESTAMP NOT NULL,"
-                + "status VARCHAR(50) NOT NULL,"
-                + "forma_pagamento VARCHAR(50),"
-                + "valor NUMERIC(10,2),"
-                + "reacoes TEXT,"
-                + "observacoes_adicionais TEXT,"
-                + "FOREIGN KEY(paciente_id) REFERENCES pacientes(id),"
-                + "FOREIGN KEY(vacina_id) REFERENCES vacinas(id))";
+                + "id SERIAL PRIMARY KEY, paciente_id INTEGER NOT NULL, vacina_id INTEGER NOT NULL, data_hora TIMESTAMP NOT NULL, status VARCHAR(50) NOT NULL, forma_pagamento VARCHAR(50), valor NUMERIC(10,2), reacoes TEXT, observacoes_adicionais TEXT, FOREIGN KEY(paciente_id) REFERENCES pacientes(id), FOREIGN KEY(vacina_id) REFERENCES vacinas(id))";
+        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute(sql); } catch (SQLException e) { }
+    }
 
-        try (Connection conn = ConnectionFactory.getConnection();
-             Statement stmt = conn.createStatement()) {
-            stmt.execute(sql);
+    // Função centralizada para buscar as reservas
+    public int buscarQuantidadeReservada(int vacinaId) {
+        int qtd = 0;
+        String sql = "SELECT COUNT(*) FROM aplicacoes_v2 WHERE vacina_id = ? AND status = 'Agendado'";
+        try (Connection c = ConnectionFactory.getConnection(); PreparedStatement p = c.prepareStatement(sql)) {
+            p.setInt(1, vacinaId);
+            try (ResultSet rs = p.executeQuery()) { if (rs.next()) qtd = rs.getInt(1); }
+        } catch (SQLException e) {}
+        return qtd;
+    }
+
+    public boolean salvarEmLote(List<Aplicacao> aplicacoes) {
+        String sqlApp = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, reacoes, observacoes_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        String sqlEstoque = "UPDATE vacinas SET quantidade_estoque = quantidade_estoque - 1 WHERE id = ?";
+        Connection conn = null;
+        try {
+            conn = ConnectionFactory.getConnection(); conn.setAutoCommit(false);
+            try (PreparedStatement stmtApp = conn.prepareStatement(sqlApp); PreparedStatement stmtEst = conn.prepareStatement(sqlEstoque)) {
+                for (Aplicacao app : aplicacoes) {
+                    stmtApp.setInt(1, app.getPaciente().getId()); stmtApp.setInt(2, app.getVacina().getId()); stmtApp.setTimestamp(3, java.sql.Timestamp.valueOf(app.getDataHora())); stmtApp.setString(4, app.getStatus()); stmtApp.setString(5, app.getFormaPagamento()); stmtApp.setDouble(6, app.getValor()); stmtApp.setString(7, app.getReacoes() != null ? app.getReacoes() : ""); stmtApp.setString(8, app.getObservacoesAdicionais() != null ? app.getObservacoesAdicionais() : "");
+                    stmtApp.executeUpdate();
+
+                    // SÓ TIRA DA GELADEIRA SE FOR APLICADO NA HORA
+                    if (app.getStatus().equalsIgnoreCase("Aplicado")) {
+                        stmtEst.setInt(1, app.getVacina().getId());
+                        stmtEst.executeUpdate();
+                    }
+                }
+            }
+            conn.commit(); return true;
         } catch (SQLException e) {
-            System.err.println("Erro ao criar tabela aplicacoes_v2: " + e.getMessage());
-        }
+            if (conn != null) try { conn.rollback(); } catch(Exception ex) {}
+            return false;
+        } finally { if (conn != null) try { conn.setAutoCommit(true); conn.close(); } catch(Exception ex) {} }
     }
 
     public boolean salvar(Aplicacao app) {
-        String sql = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, reacoes, observacoes_adicionais) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-
-        try (Connection conn = ConnectionFactory.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, app.getPaciente().getId());
-            stmt.setInt(2, app.getVacina().getId());
-            stmt.setTimestamp(3, java.sql.Timestamp.valueOf(app.getDataHora()));
-            stmt.setString(4, app.getStatus());
-            stmt.setString(5, app.getFormaPagamento());
-            stmt.setDouble(6, app.getValor());
-            stmt.setString(7, app.getReacoes());
-            stmt.setString(8, app.getObservacoesAdicionais());
-
+        String sql = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, reacoes, observacoes_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        String sqlEstoque = "UPDATE vacinas SET quantidade_estoque = quantidade_estoque - 1 WHERE id = ?";
+        try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql); PreparedStatement stmtEst = conn.prepareStatement(sqlEstoque)) {
+            stmt.setInt(1, app.getPaciente().getId()); stmt.setInt(2, app.getVacina().getId()); stmt.setTimestamp(3, java.sql.Timestamp.valueOf(app.getDataHora())); stmt.setString(4, app.getStatus()); stmt.setString(5, app.getFormaPagamento()); stmt.setDouble(6, app.getValor()); stmt.setString(7, app.getReacoes()); stmt.setString(8, app.getObservacoesAdicionais());
             stmt.executeUpdate();
+
+            if (app.getStatus().equalsIgnoreCase("Aplicado")) {
+                stmtEst.setInt(1, app.getVacina().getId());
+                stmtEst.executeUpdate();
+            }
             return true;
-        } catch (SQLException e) {
-            System.err.println("Erro ao salvar: " + e.getMessage());
-            return false;
-        }
+        } catch (SQLException e) { return false; }
     }
 
     public boolean atualizar(Aplicacao app) {
         String sql = "UPDATE aplicacoes_v2 SET paciente_id=?, vacina_id=?, data_hora=?, status=?, forma_pagamento=?, valor=?, reacoes=?, observacoes_adicionais=? WHERE id=?";
-
-        try (Connection conn = ConnectionFactory.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setInt(1, app.getPaciente().getId());
-            stmt.setInt(2, app.getVacina().getId());
-            stmt.setTimestamp(3, Timestamp.valueOf(app.getDataHora()));
-            stmt.setString(4, app.getStatus());
-            stmt.setString(5, app.getFormaPagamento());
-            stmt.setDouble(6, app.getValor());
-            stmt.setString(7, app.getReacoes());
-            stmt.setString(8, app.getObservacoesAdicionais());
-            stmt.setInt(9, app.getId());
-
-            stmt.executeUpdate();
-            return true;
-        } catch (SQLException e) {
-            System.err.println("Erro ao atualizar aplicação: " + e.getMessage());
-            return false;
-        }
+        try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, app.getPaciente().getId()); stmt.setInt(2, app.getVacina().getId()); stmt.setTimestamp(3, Timestamp.valueOf(app.getDataHora())); stmt.setString(4, app.getStatus()); stmt.setString(5, app.getFormaPagamento()); stmt.setDouble(6, app.getValor()); stmt.setString(7, app.getReacoes()); stmt.setString(8, app.getObservacoesAdicionais()); stmt.setInt(9, app.getId());
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) { return false; }
     }
 
-    // =========================================================
-    // NOVO MÉTODO: ATUALIZA APENAS O STATUS E O PAGAMENTO
-    // =========================================================
     public boolean atualizarStatusEPagamento(int id, String status, String formaPagamento) {
         String sql = "UPDATE aplicacoes_v2 SET status = ?, forma_pagamento = ? WHERE id = ?";
-
-        try (Connection conn = ConnectionFactory.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, status);
-            stmt.setString(2, formaPagamento);
-            stmt.setInt(3, id);
-
-            return stmt.executeUpdate() > 0;
-
-        } catch (SQLException e) {
-            System.err.println("Erro ao atualizar status e pagamento: " + e.getMessage());
-            return false;
-        }
+        try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, status); stmt.setString(2, formaPagamento); stmt.setInt(3, id); return stmt.executeUpdate() > 0;
+        } catch (SQLException e) { return false; }
     }
 
     public List<Aplicacao> listarTodas() {
-        List<Aplicacao> lista = new ArrayList<>();
-        String sql = "SELECT a.*, p.nome as nome_paciente, v.nome_vacina, v.lote " +
-                "FROM aplicacoes_v2 a " +
-                "JOIN pacientes p ON a.paciente_id = p.id " +
-                "JOIN vacinas v ON a.vacina_id = v.id " +
-                "ORDER BY a.data_hora DESC";
-
-        try (Connection conn = ConnectionFactory.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
+        List<Aplicacao> lista = new ArrayList<>(); String sql = "SELECT a.*, p.nome as nome_paciente, v.nome_vacina, v.lote FROM aplicacoes_v2 a JOIN pacientes p ON a.paciente_id = p.id JOIN vacinas v ON a.vacina_id = v.id ORDER BY a.data_hora DESC";
+        try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql); ResultSet rs = stmt.executeQuery()) {
             while (rs.next()) {
-                Aplicacao app = new Aplicacao();
-                app.setId(rs.getInt("id"));
-
-                Paciente p = new Paciente();
-                p.setId(rs.getInt("paciente_id"));
-                p.setNome(rs.getString("nome_paciente"));
-                app.setPaciente(p);
-
-                Vacina v = new Vacina();
-                v.setId(rs.getInt("vacina_id"));
-                v.setNomeVacina(rs.getString("nome_vacina"));
-                v.setLote(rs.getString("lote"));
-                app.setVacina(v);
-
-                if (rs.getTimestamp("data_hora") != null) {
-                    app.setDataHora(rs.getTimestamp("data_hora").toLocalDateTime());
-                }
-
-                app.setStatus(rs.getString("status"));
-                app.setFormaPagamento(rs.getString("forma_pagamento"));
-                app.setValor(rs.getDouble("valor"));
-
-                app.setReacoes(rs.getString("reacoes"));
-                app.setObservacoesAdicionais(rs.getString("observacoes_adicionais"));
-
+                Aplicacao app = new Aplicacao(); app.setId(rs.getInt("id"));
+                Paciente p = new Paciente(); p.setId(rs.getInt("paciente_id")); p.setNome(rs.getString("nome_paciente")); app.setPaciente(p);
+                Vacina v = new Vacina(); v.setId(rs.getInt("vacina_id")); v.setNomeVacina(rs.getString("nome_vacina")); v.setLote(rs.getString("lote")); app.setVacina(v);
+                if (rs.getTimestamp("data_hora") != null) app.setDataHora(rs.getTimestamp("data_hora").toLocalDateTime());
+                app.setStatus(rs.getString("status")); app.setFormaPagamento(rs.getString("forma_pagamento")); app.setValor(rs.getDouble("valor")); app.setReacoes(rs.getString("reacoes")); app.setObservacoesAdicionais(rs.getString("observacoes_adicionais"));
                 lista.add(app);
             }
-        } catch (SQLException e) {
-            System.err.println("Erro ao listar: " + e.getMessage());
-        }
-        return lista;
+        } catch (SQLException e) { } return lista;
     }
 
     public boolean excluir(int id) {
         String sql = "DELETE FROM aplicacoes_v2 WHERE id = ?";
-        try (Connection conn = ConnectionFactory.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, id);
-            return stmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            System.err.println("Erro ao excluir aplicação: " + e.getMessage());
-            return false;
-        }
+        try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, id); return stmt.executeUpdate() > 0;
+        } catch (SQLException e) { return false; }
     }
 }
