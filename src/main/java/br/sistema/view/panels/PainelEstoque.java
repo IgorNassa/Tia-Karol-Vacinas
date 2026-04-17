@@ -1,7 +1,6 @@
 package br.sistema.view.panels;
 
 import br.sistema.model.Vacina;
-import br.sistema.repository.AplicacaoDAO;
 import br.sistema.repository.VacinaDAO;
 import br.sistema.util.Cores;
 import br.sistema.view.TelaPrincipal;
@@ -27,7 +26,6 @@ public class PainelEstoque extends JPanel {
     private JTable tabela;
     private DefaultTableModel modeloTabela;
     private VacinaDAO dao;
-    private AplicacaoDAO aplicacaoDAO; // Novo
     private List<Vacina> listaVacinas;
     private int hoveredRow = -1;
 
@@ -37,7 +35,6 @@ public class PainelEstoque extends JPanel {
     public PainelEstoque(TelaPrincipal frame) {
         this.frame = frame;
         this.dao = new VacinaDAO();
-        this.aplicacaoDAO = new AplicacaoDAO();
         setOpaque(false); setLayout(new BorderLayout(0, 20));
         setBorder(new EmptyBorder(30, 40, 30, 40));
 
@@ -59,14 +56,14 @@ public class PainelEstoque extends JPanel {
 
         JPanel pnlKpis = new JPanel(new GridLayout(1, 3, 20, 0)); pnlKpis.setOpaque(false); pnlKpis.setPreferredSize(new Dimension(0, 80));
         lblTotalDoses = new JLabel("0"); lblLotesAlerta = new JLabel("0"); lblCapital = new JLabel("R$ 0,00");
-        pnlKpis.add(criarKpiCard("Doses P/ Venda", lblTotalDoses, Cores.VERDE_AQUA));
+        pnlKpis.add(criarKpiCard("Doses em Estoque", lblTotalDoses, Cores.VERDE_AQUA));
         pnlKpis.add(criarKpiCard("Lotes em Alerta", lblLotesAlerta, new Color(230, 126, 34)));
         pnlKpis.add(criarKpiCard("Capital Imobilizado", lblCapital, Cores.ROSA_KAROL));
 
         JPanel pnlCentro = new JPanel(new BorderLayout(0, 20)); pnlCentro.setOpaque(false);
         pnlCentro.add(pnlKpis, BorderLayout.NORTH);
 
-        String[] colunas = {"ID", "Vacina", "Laboratório", "Lote", "Validade", "Disponível (Venda)", "Reservadas", "Físico (Geladeira)"};
+        String[] colunas = {"ID", "Vacina", "Laboratório", "Lote", "Validade", "Estoque"};
         modeloTabela = new DefaultTableModel(new Object[][]{}, colunas) { public boolean isCellEditable(int row, int column) { return false; } };
         tabela = new JTable(modeloTabela); tabela.setRowHeight(50); tabela.setShowVerticalLines(false); tabela.setShowHorizontalLines(false); tabela.setIntercellSpacing(new Dimension(0, 5)); tabela.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
@@ -94,27 +91,20 @@ public class PainelEstoque extends JPanel {
     private void carregarDadosTabela() {
         modeloTabela.setRowCount(0); listaVacinas = dao.listarTodas();
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-        int totalDosesVenda = 0; int lotesAlerta = 0; double capital = 0.0;
+        int totalDoses = 0; int lotesAlerta = 0; double capital = 0.0;
 
         for (Vacina v : listaVacinas) {
-            // A LÓGICA PERFEITA:
-            int fisicoGeladeira = v.getQtdDisponivel(); // O que tem no banco é a geladeira
-            int reservadas = aplicacaoDAO.buscarQuantidadeReservada(v.getId());
-            int disponivelVenda = fisicoGeladeira - reservadas;
-
             String val = v.getValidade() != null ? v.getValidade().format(fmt) : "N/A";
             modeloTabela.addRow(new Object[]{
                     String.format("%03d", v.getId()), v.getNomeVacina(), v.getLaboratorio(), v.getLote(), val,
-                    String.valueOf(disponivelVenda),      // Venda Livre
-                    String.valueOf(reservadas),           // Reservadas
-                    String.valueOf(fisicoGeladeira)       // Na Geladeira Físicamente
+                    String.valueOf(v.getQtdDisponivel())
             });
 
-            totalDosesVenda += disponivelVenda;
-            if (disponivelVenda <= 5 && disponivelVenda > 0) lotesAlerta++;
-            capital += (fisicoGeladeira * v.getValorCompra()); // Capital conta o que está fisicamente lá
+            totalDoses += v.getQtdDisponivel();
+            if (v.getQtdDisponivel() <= 5 && v.getQtdDisponivel() > 0) lotesAlerta++;
+            capital += (v.getQtdDisponivel() * v.getValorCompra());
         }
-        lblTotalDoses.setText(String.valueOf(totalDosesVenda)); lblLotesAlerta.setText(String.valueOf(lotesAlerta)); lblCapital.setText(String.format("R$ %.2f", capital));
+        lblTotalDoses.setText(String.valueOf(totalDoses)); lblLotesAlerta.setText(String.valueOf(lotesAlerta)); lblCapital.setText(String.format("R$ %.2f", capital));
         hoveredRow = -1;
     }
 

@@ -214,19 +214,14 @@ public class PainelFormulario extends JPanel {
 
         Vacina v = vacinaDAO.buscarPorLoteCombo(cbVacina.getSelectedItem().toString());
 
-        // ==========================================
-        // TRAVA DE ESTOQUE ATUALIZADA (FÍSICO - RESERVA)
-        // ==========================================
-        int reservadasNoBanco = new AplicacaoDAO().buscarQuantidadeReservada(v.getId());
-        int disponivelReal = v.getQtdDisponivel() - reservadasNoBanco;
-
+        // LÓGICA DE ESTOQUE PURA E SIMPLES
         long qtdNoCarrinho = itensCarrinho.stream().filter(i -> i.getVacina().getId() == v.getId()).count();
         int qtdExtras = (aplicacaoEmEdicao == null && chkRecorrencia != null && chkRecorrencia.isSelected()) ? (cbQtdDoses.getSelectedIndex() + 1) : 0;
         int totalTentandoAdicionar = 1 + qtdExtras;
 
-        if (disponivelReal - qtdNoCarrinho - totalTentandoAdicionar < 0) {
+        if (v.getQtdDisponivel() - qtdNoCarrinho - totalTentandoAdicionar < 0) {
             JOptionPane.showMessageDialog(this,
-                    "ESTOQUE INSUFICIENTE PARA VENDA!\n\nGeladeira: " + v.getQtdDisponivel() + " doses.\nReservadas: " + reservadasNoBanco + " doses.\nLivre para Venda: " + disponivelReal + " doses.\n\nO sistema não permite registrar mais aplicações ou esquemas vacinais do que as doses livres suportam.",
+                    "ESTOQUE INSUFICIENTE!\n\nVocê tem apenas " + v.getQtdDisponivel() + " doses desta vacina no estoque.\nNão é possível adicionar mais doses do que o existente na geladeira.",
                     "Estoque Esgotado", JOptionPane.ERROR_MESSAGE);
             return;
         }

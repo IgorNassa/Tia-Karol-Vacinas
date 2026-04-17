@@ -17,7 +17,6 @@ public class AplicacaoDAO {
         try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute(sql); } catch (SQLException e) { }
     }
 
-    // Função centralizada para buscar as reservas
     public int buscarQuantidadeReservada(int vacinaId) {
         int qtd = 0;
         String sql = "SELECT COUNT(*) FROM aplicacoes_v2 WHERE vacina_id = ? AND status = 'Agendado'";
@@ -30,7 +29,8 @@ public class AplicacaoDAO {
 
     public boolean salvarEmLote(List<Aplicacao> aplicacoes) {
         String sqlApp = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, reacoes, observacoes_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        String sqlEstoque = "UPDATE vacinas SET quantidade_estoque = quantidade_estoque - 1 WHERE id = ?";
+        // CORREÇÃO: Agora desconta da coluna correta (qtd_disponivel)
+        String sqlEstoque = "UPDATE vacinas SET qtd_disponivel = qtd_disponivel - 1 WHERE id = ?";
         Connection conn = null;
         try {
             conn = ConnectionFactory.getConnection(); conn.setAutoCommit(false);
@@ -55,7 +55,8 @@ public class AplicacaoDAO {
 
     public boolean salvar(Aplicacao app) {
         String sql = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, reacoes, observacoes_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        String sqlEstoque = "UPDATE vacinas SET quantidade_estoque = quantidade_estoque - 1 WHERE id = ?";
+        // CORREÇÃO AQUI TAMBÉM
+        String sqlEstoque = "UPDATE vacinas SET qtd_disponivel = qtd_disponivel - 1 WHERE id = ?";
         try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql); PreparedStatement stmtEst = conn.prepareStatement(sqlEstoque)) {
             stmt.setInt(1, app.getPaciente().getId()); stmt.setInt(2, app.getVacina().getId()); stmt.setTimestamp(3, java.sql.Timestamp.valueOf(app.getDataHora())); stmt.setString(4, app.getStatus()); stmt.setString(5, app.getFormaPagamento()); stmt.setDouble(6, app.getValor()); stmt.setString(7, app.getReacoes()); stmt.setString(8, app.getObservacoesAdicionais());
             stmt.executeUpdate();
@@ -69,17 +70,55 @@ public class AplicacaoDAO {
     }
 
     public boolean atualizar(Aplicacao app) {
+        String sqlAntigo = "SELECT status FROM aplicacoes_v2 WHERE id = ?";
+        String statusAntigo = "";
+        try (Connection c = ConnectionFactory.getConnection(); PreparedStatement p = c.prepareStatement(sqlAntigo)) {
+            p.setInt(1, app.getId());
+            ResultSet rs = p.executeQuery();
+            if (rs.next()) statusAntigo = rs.getString("status");
+        } catch (Exception e) {}
+
         String sql = "UPDATE aplicacoes_v2 SET paciente_id=?, vacina_id=?, data_hora=?, status=?, forma_pagamento=?, valor=?, reacoes=?, observacoes_adicionais=? WHERE id=?";
         try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, app.getPaciente().getId()); stmt.setInt(2, app.getVacina().getId()); stmt.setTimestamp(3, Timestamp.valueOf(app.getDataHora())); stmt.setString(4, app.getStatus()); stmt.setString(5, app.getFormaPagamento()); stmt.setDouble(6, app.getValor()); stmt.setString(7, app.getReacoes()); stmt.setString(8, app.getObservacoesAdicionais()); stmt.setInt(9, app.getId());
-            return stmt.executeUpdate() > 0;
+            stmt.executeUpdate();
+
+            // BAIXA INTELIGENTE: Só desconta se antes era "Agendado" e agora virou "Aplicado"
+            if (!statusAntigo.equalsIgnoreCase("Aplicado") && app.getStatus().equalsIgnoreCase("Aplicado")) {
+                // CORREÇÃO: qtd_disponivel
+                String sqlEstoque = "UPDATE vacinas SET qtd_disponivel = qtd_disponivel - 1 WHERE id = ?";
+                try(PreparedStatement pEst = conn.prepareStatement(sqlEstoque)){
+                    pEst.setInt(1, app.getVacina().getId()); pEst.executeUpdate();
+                }
+            }
+            return true;
         } catch (SQLException e) { return false; }
     }
 
     public boolean atualizarStatusEPagamento(int id, String status, String formaPagamento) {
+        String sqlAntigo = "SELECT status, vacina_id FROM aplicacoes_v2 WHERE id = ?";
+        String statusAntigo = "";
+        int idVacina = -1;
+        try (Connection c = ConnectionFactory.getConnection(); PreparedStatement p = c.prepareStatement(sqlAntigo)) {
+            p.setInt(1, id);
+            ResultSet rs = p.executeQuery();
+            if (rs.next()) { statusAntigo = rs.getString("status"); idVacina = rs.getInt("vacina_id"); }
+        } catch (Exception e) {}
+
         String sql = "UPDATE aplicacoes_v2 SET status = ?, forma_pagamento = ? WHERE id = ?";
         try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, status); stmt.setString(2, formaPagamento); stmt.setInt(3, id); return stmt.executeUpdate() > 0;
+            stmt.setString(1, status); stmt.setString(2, formaPagamento); stmt.setInt(3, id);
+            int rows = stmt.executeUpdate();
+
+            // BAIXA INTELIGENTE NO BOTÃO "MARCAR COMO APLICADA"
+            if (rows > 0 && !statusAntigo.equalsIgnoreCase("Aplicado") && status.equalsIgnoreCase("Aplicado") && idVacina != -1) {
+                // CORREÇÃO: qtd_disponivel
+                String sqlEstoque = "UPDATE vacinas SET qtd_disponivel = qtd_disponivel - 1 WHERE id = ?";
+                try(PreparedStatement pEst = conn.prepareStatement(sqlEstoque)){
+                    pEst.setInt(1, idVacina); pEst.executeUpdate();
+                }
+            }
+            return rows > 0;
         } catch (SQLException e) { return false; }
     }
 
