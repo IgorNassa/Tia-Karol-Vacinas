@@ -1,6 +1,7 @@
 package br.sistema.model;
 
 import java.time.LocalDate;
+import java.time.Period;
 
 public class Paciente {
     private int id;
@@ -35,6 +36,15 @@ public class Paciente {
         this.nomeResponsavel = nomeResponsavel; this.cpfResponsavel = cpfResponsavel;
         this.nomeResponsavel2 = nomeResponsavel2; this.cpfResponsavel2 = cpfResponsavel2;
         this.foto = foto; this.endereco = endereco;
+    }
+
+    // NOVO: Cálculo Automático de Idade
+    public String getIdadeCalculada() {
+        if (this.dataNascimento == null) return "N/I";
+        Period p = Period.between(this.dataNascimento, LocalDate.now());
+        if (p.getYears() > 0) return p.getYears() + " anos";
+        if (p.getMonths() > 0) return p.getMonths() + " meses";
+        return p.getDays() + " dias";
     }
 
     // Getters e Setters Padrões

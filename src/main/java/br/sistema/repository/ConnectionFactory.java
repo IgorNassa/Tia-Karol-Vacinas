@@ -6,7 +6,7 @@ import java.sql.SQLException;
 
 public class ConnectionFactory {
 
-    private static final String URL = "jdbc:postgresql://localhost:5432/vacin_control?sslmode=disable";
+    private static final String URL = "jdbc:postgresql://192.168.3.13:5432/vacin_control?sslmode=disable";
 
     private static final String USER = "postgres";
 

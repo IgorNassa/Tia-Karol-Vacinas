@@ -15,7 +15,7 @@ public class PacienteDAO {
         String sql = "CREATE TABLE IF NOT EXISTS pacientes ("
                 + "id SERIAL PRIMARY KEY, nome VARCHAR(255) NOT NULL, cpf VARCHAR(20), data_nascimento VARCHAR(20), sexo VARCHAR(20), cartao_sus VARCHAR(50), telefone VARCHAR(20), telefone_2 VARCHAR(20), alergias TEXT, medico_encaminhador VARCHAR(255), "
                 + "nome_responsavel VARCHAR(255), cpf_responsavel VARCHAR(20), "
-                + "nome_responsavel_2 VARCHAR(255), cpf_responsavel_2 VARCHAR(20), " // NOVOS
+                + "nome_responsavel_2 VARCHAR(255), cpf_responsavel_2 VARCHAR(20), "
                 + "foto BYTEA, cep VARCHAR(20), rua VARCHAR(255), numero VARCHAR(20), complemento VARCHAR(255), bairro VARCHAR(100), cidade VARCHAR(100), uf VARCHAR(2), codigo_ibge VARCHAR(20))";
         try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute(sql); } catch (SQLException e) { }
     }
@@ -47,21 +47,42 @@ public class PacienteDAO {
     }
 
     // =========================================================
-    // NOVO: BUSCA INTELIGENTE DE FAMILIARES
+    // LÓGICA BLINDADA: VERIFICA OS 3 CPFs (PRÓPRIO E DOS 2 RESPs)
     // =========================================================
-    public List<Paciente> buscarFamiliaresPorCpfResponsavel(String cpfResp1, String cpfResp2, int idIgnorar) {
+    public List<Paciente> buscarFamiliaresPorCpfResponsavel(String cpfPrincipal, String cpfResp1, String cpfResp2, int idIgnorar) {
         List<Paciente> lista = new ArrayList<>();
-        if ((cpfResp1 == null || cpfResp1.isEmpty()) && (cpfResp2 == null || cpfResp2.isEmpty())) return lista;
+        List<String> cpfsValidos = new ArrayList<>();
 
-        String sql = "SELECT * FROM pacientes WHERE id != ? AND ( (cpf_responsavel = ? AND cpf_responsavel != '') OR (cpf_responsavel_2 = ? AND cpf_responsavel_2 != '') OR (cpf = ? AND cpf != '') )";
-        try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        // Adiciona à lista de busca apenas CPFs que estão preenchidos de verdade
+        if (cpfPrincipal != null && !cpfPrincipal.trim().isEmpty() && !cpfPrincipal.equals("   .   .   -  ")) cpfsValidos.add(cpfPrincipal);
+        if (cpfResp1 != null && !cpfResp1.trim().isEmpty() && !cpfResp1.equals("   .   .   -  ")) cpfsValidos.add(cpfResp1);
+        if (cpfResp2 != null && !cpfResp2.trim().isEmpty() && !cpfResp2.equals("   .   .   -  ")) cpfsValidos.add(cpfResp2);
+
+        if (cpfsValidos.isEmpty()) return lista;
+
+        // Monta a query dinamicamente dependendo de quantos CPFs a família tem cadastrados
+        StringBuilder queryBuilder = new StringBuilder("SELECT * FROM pacientes WHERE id != ? AND (");
+        boolean first = true;
+        for (int i = 0; i < cpfsValidos.size(); i++) {
+            if (!first) queryBuilder.append(" OR ");
+            queryBuilder.append("(cpf = ? OR cpf_responsavel = ? OR cpf_responsavel_2 = ?)");
+            first = false;
+        }
+        queryBuilder.append(")");
+
+        try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement pstmt = conn.prepareStatement(queryBuilder.toString())) {
             pstmt.setInt(1, idIgnorar);
-            pstmt.setString(2, cpfResp1);
-            pstmt.setString(3, cpfResp1); // Cruza as verificações
-            pstmt.setString(4, cpfResp1);
+            int paramIndex = 2;
+            for (String cpf : cpfsValidos) {
+                pstmt.setString(paramIndex++, cpf);
+                pstmt.setString(paramIndex++, cpf);
+                pstmt.setString(paramIndex++, cpf);
+            }
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) lista.add(mapearPaciente(rs));
-        } catch (SQLException e) { } return lista;
+        } catch (SQLException e) { System.out.println("Erro ao buscar familiares: " + e.getMessage()); }
+
+        return lista;
     }
 
     private Paciente mapearPaciente(ResultSet rs) throws SQLException {
