@@ -73,18 +73,18 @@ public class TelaPrincipal extends JFrame {
 
         SwingUtilities.invokeLater(() -> {
             TelaPrincipal tela = new TelaPrincipal();
-
-            // 1. Configura a Quebra de Caixa ao Clicar no X
-            br.sistema.util.GerenciadorCaixa.configurarFechamento(tela);
-
-            // 2. Exibe a tela de fundo
-            tela.setVisible(true);
-
-            // 3. Pula o Abertura de Caixa
-            br.sistema.util.GerenciadorCaixa.iniciarAbertura(tela);
-
-            // 4. Pula o Modal de Alertas Críticos do Estoque
-            br.sistema.view.components.ModalAlertasEstoque.verificarEExibir(tela);
+//
+//            // 1. Configura a Quebra de Caixa ao Clicar no X
+//            br.sistema.util.GerenciadorCaixa.configurarFechamento(tela);
+//
+//            // 2. Exibe a tela de fundo
+//            tela.setVisible(true);
+//
+//            // 3. Pula o Abertura de Caixa
+//            br.sistema.util.GerenciadorCaixa.iniciarAbertura(tela);
+//
+//            // 4. Pula o Modal de Alertas Críticos do Estoque
+//            br.sistema.view.components.ModalAlertasEstoque.verificarEExibir(tela);
         });
     }
 }

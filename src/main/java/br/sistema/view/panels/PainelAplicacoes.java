@@ -40,11 +40,11 @@ public class PainelAplicacoes extends JPanel {
         this.dao = new AplicacaoDAO();
         setOpaque(false);
         setLayout(new BorderLayout(0, 20));
-        setBorder(new EmptyBorder(30, 40, 30, 40));
+        setBorder(new EmptyBorder(15, 20, 15, 20)); // Margem reduzida para caber em telas menores
 
         GlassPanel cardVidro = new GlassPanel();
         cardVidro.setLayout(new BorderLayout(0, 15));
-        cardVidro.setBorder(new EmptyBorder(25, 35, 30, 35));
+        cardVidro.setBorder(new EmptyBorder(15, 20, 15, 20)); // Margem reduzida do card
 
         // HEADER
         JPanel header = new JPanel(new BorderLayout(20, 0));
@@ -59,7 +59,7 @@ public class PainelAplicacoes extends JPanel {
         btnNovo.setBackground(Cores.VERDE_AQUA);
         btnNovo.setForeground(Color.WHITE);
         btnNovo.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnNovo.setPreferredSize(new Dimension(180, 45));
+        btnNovo.setPreferredSize(new Dimension(150, 40)); // Reduzido para melhor responsividade
         btnNovo.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         btnNovo.addActionListener(e -> frame.trocarTelaCentral(new PainelFormulario(frame)));
@@ -98,7 +98,7 @@ public class PainelAplicacoes extends JPanel {
         JPanel pnlBusca = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 5));
         pnlBusca.setOpaque(false);
         txtBusca = new JTextField();
-        txtBusca.setPreferredSize(new Dimension(300, 40));
+        txtBusca.setPreferredSize(new Dimension(200, 40)); // Reduzido para não empurrar a navbar
 
         // Texto sem o emoji
         txtBusca.putClientProperty("JTextField.placeholderText", "Buscar paciente ou vacina...");
@@ -162,7 +162,7 @@ public class PainelAplicacoes extends JPanel {
         btnMarcarAplicada.setBackground(Cores.VERDE_AQUA);
         btnMarcarAplicada.setForeground(Color.WHITE);
         btnMarcarAplicada.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnMarcarAplicada.setPreferredSize(new Dimension(200, 45));
+        btnMarcarAplicada.setPreferredSize(new Dimension(180, 40)); // Reduzido para melhorar layout
         btnMarcarAplicada.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         btnMarcarAplicada.addActionListener(e -> marcarComoAplicada());
