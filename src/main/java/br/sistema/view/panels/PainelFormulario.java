@@ -249,7 +249,12 @@ public class PainelFormulario extends JPanel {
 
         // SE VEIO DA TELA DE EDIÇÃO, COLOCA NO CARRINHO E SELECIONA
         if (appEdicao != null) {
-            itensCarrinho.add(appEdicao); adicionarLinhaTabela(appEdicao); cbPagamento.setSelectedItem(appEdicao.getFormaPagamento()); atualizarFinanceiro();
+            itensCarrinho.add(appEdicao);
+            adicionarLinhaTabela(appEdicao);
+            cbPagamento.setSelectedItem(appEdicao.getFormaPagamento());
+            txtDesconto.setText(String.format(new Locale("pt", "BR"), "%.2f", appEdicao.getDesconto()));
+            rbReais.setSelected(true);
+            atualizarFinanceiro();
             tabelaCarrinho.setRowSelectionInterval(0, 0); // Seleciona a linha na tabela automaticamente
             SwingUtilities.invokeLater(() -> carregarItemParaEdicao(0));
         }
@@ -321,7 +326,9 @@ public class PainelFormulario extends JPanel {
         String status = cbStatus.getSelectedItem().toString();
 
         if (indiceItemEditado == -1) {
-            Aplicacao app = new Aplicacao(); app.setPaciente(pAlvo); app.setVacina(v); app.setDataHora(LocalDateTime.of(dataDef, horaDefinitiva)); app.setStatus(status); app.setValor(v.getValorVenda());
+            Aplicacao app = new Aplicacao(); app.setPaciente(pAlvo); app.setVacina(v); app.setDataHora(LocalDateTime.of(dataDef, horaDefinitiva)); app.setStatus(status);
+            app.setValor(v.getValorVenda());
+            app.setValorBruto(v.getValorVenda());
             itensCarrinho.add(app); adicionarLinhaTabela(app);
 
             if (chkRecorrencia != null && chkRecorrencia.isSelected()) {
@@ -330,26 +337,46 @@ public class PainelFormulario extends JPanel {
                 int dias = Integer.parseInt(intervaloTexto);
                 for (int i = 1; i <= qtdExtras; i++) {
                     LocalDate dataFutura = dataDef.plusDays((long) dias * i); if (dataFutura.getDayOfWeek() == DayOfWeek.SUNDAY) dataFutura = dataFutura.plusDays(1);
-                    Aplicacao appRec = new Aplicacao(); appRec.setPaciente(pAlvo); appRec.setVacina(v); appRec.setDataHora(LocalDateTime.of(dataFutura, horaDefinitiva)); appRec.setStatus("Agendado"); appRec.setValor(v.getValorVenda());
+                    Aplicacao appRec = new Aplicacao(); appRec.setPaciente(pAlvo); appRec.setVacina(v); appRec.setDataHora(LocalDateTime.of(dataFutura, horaDefinitiva)); appRec.setStatus("Agendado");
+                    appRec.setValor(v.getValorVenda());
+                    appRec.setValorBruto(v.getValorVenda());
                     itensCarrinho.add(appRec); adicionarLinhaTabela(appRec);
                 }
             }
         } else {
-            Aplicacao app = itensCarrinho.get(indiceItemEditado); valorBrutoCarrinho -= app.getValor();
-            app.setPaciente(pAlvo); app.setVacina(v); app.setDataHora(LocalDateTime.of(dataDef, horaDefinitiva)); app.setStatus(status); app.setValor(v.getValorVenda());
-            valorBrutoCarrinho += app.getValor();
+            Aplicacao app = itensCarrinho.get(indiceItemEditado);
+            double valAntigo = app.getValorBruto() > 0 ? app.getValorBruto() : app.getValor();
+            valorBrutoCarrinho -= valAntigo;
 
-            modeloCarrinho.setValueAt(pAlvo.getNome().split(" ")[0], indiceItemEditado, 0); modeloCarrinho.setValueAt(v.getNomeVacina(), indiceItemEditado, 1); modeloCarrinho.setValueAt(app.getDataHora().format(DateTimeFormatter.ofPattern("dd/MM/yy")), indiceItemEditado, 2); modeloCarrinho.setValueAt(app.getStatus(), indiceItemEditado, 3); modeloCarrinho.setValueAt(String.format("R$ %.2f", app.getValor()), indiceItemEditado, 4);
+            app.setPaciente(pAlvo); app.setVacina(v); app.setDataHora(LocalDateTime.of(dataDef, horaDefinitiva)); app.setStatus(status);
+            app.setValor(v.getValorVenda());
+            app.setValorBruto(v.getValorVenda());
+
+            valorBrutoCarrinho += app.getValorBruto();
+
+            modeloCarrinho.setValueAt(pAlvo.getNome().split(" ")[0], indiceItemEditado, 0);
+            modeloCarrinho.setValueAt(v.getNomeVacina(), indiceItemEditado, 1);
+            modeloCarrinho.setValueAt(app.getDataHora().format(DateTimeFormatter.ofPattern("dd/MM/yy")), indiceItemEditado, 2);
+            modeloCarrinho.setValueAt(app.getStatus(), indiceItemEditado, 3);
+            modeloCarrinho.setValueAt(String.format("R$ %.2f", app.getValorBruto()), indiceItemEditado, 4);
         }
 
         atualizarFinanceiro(); limparFormularioItem();
     }
 
-    private void adicionarLinhaTabela(Aplicacao app) { valorBrutoCarrinho += app.getValor(); modeloCarrinho.addRow(new Object[]{ app.getPaciente().getNome().split(" ")[0], app.getVacina().getNomeVacina(), app.getDataHora().format(DateTimeFormatter.ofPattern("dd/MM/yy")), app.getStatus(), String.format("R$ %.2f", app.getValor()) }); }
+    private void adicionarLinhaTabela(Aplicacao app) {
+        double valorBase = app.getValorBruto() > 0 ? app.getValorBruto() : app.getValor();
+        valorBrutoCarrinho += valorBase;
+        modeloCarrinho.addRow(new Object[]{ app.getPaciente().getNome().split(" ")[0], app.getVacina().getNomeVacina(), app.getDataHora().format(DateTimeFormatter.ofPattern("dd/MM/yy")), app.getStatus(), String.format("R$ %.2f", valorBase) });
+    }
 
     private void removerItemCarrinho() {
         int row = tabelaCarrinho.getSelectedRow();
-        if (row >= 0 && indiceItemEditado == -1) { valorBrutoCarrinho -= itensCarrinho.get(row).getValor(); itensCarrinho.remove(row); modeloCarrinho.removeRow(row); atualizarFinanceiro(); }
+        if (row >= 0 && indiceItemEditado == -1) {
+            double val = itensCarrinho.get(row).getValorBruto() > 0 ? itensCarrinho.get(row).getValorBruto() : itensCarrinho.get(row).getValor();
+            valorBrutoCarrinho -= val;
+            itensCarrinho.remove(row); modeloCarrinho.removeRow(row); atualizarFinanceiro();
+        }
         else if (row >= 0 && indiceItemEditado != -1) { JOptionPane.showMessageDialog(this, "Não é possível remover enquanto o item está sendo editado. Clique em 'Novo Item' para cancelar a edição primeiro.", "Aviso", JOptionPane.WARNING_MESSAGE); }
         else { JOptionPane.showMessageDialog(this, "Selecione um item na tabela para remover.", "Aviso", JOptionPane.WARNING_MESSAGE); }
     }
@@ -375,7 +402,11 @@ public class PainelFormulario extends JPanel {
         for (Aplicacao a : itensCarrinho) {
             a.setFormaPagamento(a.getStatus().equals("Agendado") ? "Pendente" : pagamento);
             if(a.getStatus().equals("Aplicado") && pagamento.equals("Pendente")) { JOptionPane.showMessageDialog(this, "Status 'Aplicado' não pode ficar com pagamento 'Pendente'."); return; }
-            a.setValor(a.getValor() * proporcao);
+
+            double vBrutoOriginal = a.getValorBruto() > 0 ? a.getValorBruto() : a.getValor();
+            a.setValorBruto(vBrutoOriginal);
+            a.setValor(vBrutoOriginal * proporcao);
+            a.setDesconto(vBrutoOriginal - a.getValor());
 
             if (a.getId() > 0) { if (!appDao.atualizar(a)) sucesso = false; } else { novasApps.add(a); }
         }
