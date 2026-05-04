@@ -28,6 +28,7 @@ public class PainelEstoque extends JPanel {
     private VacinaDAO dao;
     private List<Vacina> listaVacinas;
     private int hoveredRow = -1;
+    private JComboBox<String> cbFiltroEstoque;
 
     private JLabel lblTotalDoses, lblLotesAlerta, lblCapital;
     private Map<JComponent, JLabel> mapLabels = new HashMap<>();
@@ -36,27 +37,37 @@ public class PainelEstoque extends JPanel {
         this.frame = frame;
         this.dao = new VacinaDAO();
         setOpaque(false); setLayout(new BorderLayout(0, 20));
-        setBorder(new EmptyBorder(30, 40, 30, 40));
+        setBorder(new EmptyBorder(15, 20, 15, 20));
 
         GlassPanel cardVidro = new GlassPanel();
-        cardVidro.setLayout(new BorderLayout(0, 15)); cardVidro.setBorder(new EmptyBorder(25, 35, 30, 35));
+        cardVidro.setLayout(new BorderLayout(0, 15)); cardVidro.setBorder(new EmptyBorder(15, 20, 15, 20));
 
         JPanel header = new JPanel(new BorderLayout(20, 0)); header.setOpaque(false);
         JLabel titulo = new JLabel("Estoque e Lotes");
         titulo.setFont(new Font("Segoe UI Semilight", Font.PLAIN, 32)); titulo.setForeground(Cores.CINZA_GRAFITE);
         header.add(titulo, BorderLayout.WEST);
 
+        JPanel pnlAcoesTop = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0)); pnlAcoesTop.setOpaque(false);
+
+        cbFiltroEstoque = new JComboBox<>(new String[]{"Estoque Ativo (> 0)", "Lotes Zerados / Histórico"});
+        cbFiltroEstoque.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        cbFiltroEstoque.setPreferredSize(new Dimension(220, 38));
+        cbFiltroEstoque.addActionListener(e -> carregarDadosTabela());
+
         JButton btnNovo = new JButton(" Novo Registro");
         btnNovo.setIcon(carregarIcone("adicionar.svg", 18, Color.WHITE));
         btnNovo.setBackground(Cores.VERDE_AQUA); btnNovo.setForeground(Color.WHITE);
-        btnNovo.setFont(new Font("Segoe UI", Font.BOLD, 14)); btnNovo.setPreferredSize(new Dimension(180, 45)); btnNovo.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
+        btnNovo.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btnNovo.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnNovo.addActionListener(e -> abrirModalFormulario(null, false));
-        header.add(btnNovo, BorderLayout.EAST); cardVidro.add(header, BorderLayout.NORTH);
+
+        pnlAcoesTop.add(cbFiltroEstoque);
+        pnlAcoesTop.add(btnNovo);
+        header.add(pnlAcoesTop, BorderLayout.EAST); cardVidro.add(header, BorderLayout.NORTH);
 
         JPanel pnlKpis = new JPanel(new GridLayout(1, 3, 20, 0)); pnlKpis.setOpaque(false); pnlKpis.setPreferredSize(new Dimension(0, 80));
         lblTotalDoses = new JLabel("0"); lblLotesAlerta = new JLabel("0"); lblCapital = new JLabel("R$ 0,00");
-        pnlKpis.add(criarKpiCard("Doses em Estoque", lblTotalDoses, Cores.VERDE_AQUA));
+        pnlKpis.add(criarKpiCard("Doses Listadas", lblTotalDoses, Cores.VERDE_AQUA));
         pnlKpis.add(criarKpiCard("Lotes em Alerta", lblLotesAlerta, new Color(230, 126, 34)));
         pnlKpis.add(criarKpiCard("Capital Imobilizado", lblCapital, Cores.ROSA_KAROL));
 
@@ -93,7 +104,13 @@ public class PainelEstoque extends JPanel {
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
         int totalDoses = 0; int lotesAlerta = 0; double capital = 0.0;
 
+        boolean mostrarAtivos = cbFiltroEstoque.getSelectedIndex() == 0;
+
         for (Vacina v : listaVacinas) {
+            boolean isZerado = v.getQtdDisponivel() <= 0;
+            if (mostrarAtivos && isZerado) continue;
+            if (!mostrarAtivos && !isZerado) continue;
+
             String val = v.getValidade() != null ? v.getValidade().format(fmt) : "N/A";
             modeloTabela.addRow(new Object[]{
                     String.format("%03d", v.getId()), v.getNomeVacina(), v.getLaboratorio(), v.getLote(), val,
@@ -176,26 +193,29 @@ public class PainelEstoque extends JPanel {
         if (vEmEdicao != null) tituloModal = isNovoLote ? "Novo Lote para: " + vEmEdicao.getNomeVacina() : "Atualizar Lote";
 
         JDialog dialog = new JDialog(frame, tituloModal, true);
-        dialog.setSize(600, 650); dialog.setLocationRelativeTo(frame); dialog.getContentPane().setBackground(Color.WHITE);
+        dialog.setSize(600, 720); dialog.setLocationRelativeTo(frame); dialog.getContentPane().setBackground(Color.WHITE);
 
         JPanel pnl = new JPanel(new GridBagLayout()); pnl.setBackground(Color.WHITE); pnl.setBorder(new EmptyBorder(20, 30, 20, 30));
-        GridBagConstraints gbc = new GridBagConstraints(); gbc.fill = GridBagConstraints.HORIZONTAL; gbc.insets = new Insets(10, 10, 10, 10); gbc.weightx = 1.0;
+        GridBagConstraints gbc = new GridBagConstraints(); gbc.fill = GridBagConstraints.HORIZONTAL; gbc.insets = new Insets(8, 8, 8, 8); gbc.weightx = 1.0;
 
         JTextField txtNome = criarCampoTexto("Ex: Febre amarela");
         if (vEmEdicao != null) txtNome.setText(vEmEdicao.getNomeVacina());
         txtNome.addFocusListener(new FocusAdapter() { public void focusLost(FocusEvent e) { String t = txtNome.getText().trim().toLowerCase(); if (!t.isEmpty()) txtNome.setText(t.substring(0, 1).toUpperCase() + t.substring(1)); } });
 
-        JComboBox<String> cbTipo = new JComboBox<>(new String[]{"Inativada", "Atenuada", "Conjugada", "Subunitária", "Toxoide", "mRNA", "Vetor Viral", "Outro", "A DEFINIR"}); cbTipo.setPreferredSize(new Dimension(0, 45)); cbTipo.setBackground(Color.WHITE); cbTipo.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        JComboBox<String> cbTipo = new JComboBox<>(new String[]{"Inativada", "Atenuada", "Conjugada", "Subunitária", "Toxoide", "mRNA", "Vetor Viral", "Outro", "A DEFINIR"}); cbTipo.setPreferredSize(new Dimension(0, 40)); cbTipo.setBackground(Color.WHITE); cbTipo.setFont(new Font("Segoe UI", Font.PLAIN, 15));
         if (vEmEdicao != null) cbTipo.setSelectedItem(vEmEdicao.getTipo());
 
         JTextField txtLab = criarCampoTexto("Nome do Laboratório"); if (vEmEdicao != null) txtLab.setText(vEmEdicao.getLaboratorio());
+        JTextField txtDistribuidor = criarCampoTexto("Distribuidor/Fornecedor"); if (vEmEdicao != null) txtDistribuidor.setText(vEmEdicao.getDistribuidor());
+        JTextField txtNotaFiscal = criarCampoTexto("Nº da Nota"); if (vEmEdicao != null) txtNotaFiscal.setText(vEmEdicao.getNumeroNota());
+
         JTextField txtCompra = criarCampoTexto("0,00"); seAplicarFormatacaoMoeda(txtCompra); if (vEmEdicao != null) txtCompra.setText(String.format("%.2f", vEmEdicao.getValorCompra()).replace(".", ","));
         JTextField txtVenda = criarCampoTexto("0,00"); seAplicarFormatacaoMoeda(txtVenda); if (vEmEdicao != null) txtVenda.setText(String.format("%.2f", vEmEdicao.getValorVenda()).replace(".", ","));
-        JTextField txtObs = criarCampoTexto("Observações de transporte, temperatura, etc..."); if (vEmEdicao != null) txtObs.setText(vEmEdicao.getObservacoes());
+        JTextField txtObs = criarCampoTexto("Observações..."); if (vEmEdicao != null) txtObs.setText(vEmEdicao.getObservacoes());
 
         JTextField txtLote = criarCampoTexto("Lote Impresso"); txtLote.addFocusListener(new FocusAdapter() { public void focusLost(FocusEvent e) { txtLote.setText(txtLote.getText().trim().toUpperCase()); } });
         JFormattedTextField txtValidade = new JFormattedTextField(); aplicarMascara(txtValidade, "##/##/####"); configurarCampoFormatado(txtValidade); adicionarValidacaoDataInline(txtValidade);
-        JSpinner spQuantidade = new JSpinner(new SpinnerNumberModel(0, 0, 10000, 1)); spQuantidade.setPreferredSize(new Dimension(0, 45)); spQuantidade.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        JSpinner spQuantidade = new JSpinner(new SpinnerNumberModel(0, 0, 10000, 1)); spQuantidade.setPreferredSize(new Dimension(0, 40)); spQuantidade.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
         if (vEmEdicao != null && !isNovoLote) {
             if (vEmEdicao.getLote() != null && !vEmEdicao.getLote().equals("AGUARDANDO LOTE")) txtLote.setText(vEmEdicao.getLote());
@@ -204,12 +224,14 @@ public class PainelEstoque extends JPanel {
         }
 
         gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2; pnl.add(montarBloco("NOME DA VACINA *", txtNome), gbc);
-        gbc.gridy = 1; gbc.gridwidth = 1; pnl.add(montarBloco("TIPO DA VACINA", cbTipo), gbc); gbc.gridx = 1; pnl.add(montarBloco("LABORATÓRIO FABRICANTE", txtLab), gbc);
-        gbc.gridx = 0; gbc.gridy = 2; pnl.add(montarBloco("LOTE (Identificador) *", txtLote), gbc); gbc.gridx = 1; pnl.add(montarBloco("VALIDADE DO LOTE *", txtValidade), gbc);
-        gbc.gridx = 0; gbc.gridy = 3; pnl.add(montarBloco("CUSTO UNITÁRIO (R$)", txtCompra), gbc); gbc.gridx = 1; pnl.add(montarBloco("VALOR DE VENDA (R$)", txtVenda), gbc);
-        gbc.gridx = 0; gbc.gridy = 4; pnl.add(montarBloco("QUANTIDADE NA GELADEIRA", spQuantidade), gbc); gbc.gridx = 0; gbc.gridy = 5; gbc.gridwidth = 2; pnl.add(montarBloco("OBSERVAÇÕES", txtObs), gbc);
+        gbc.gridy = 1; gbc.gridwidth = 1; pnl.add(montarBloco("TIPO DA VACINA", cbTipo), gbc); gbc.gridx = 1; pnl.add(montarBloco("LABORATÓRIO", txtLab), gbc);
+        gbc.gridx = 0; gbc.gridy = 2; pnl.add(montarBloco("DISTRIBUIDOR", txtDistribuidor), gbc); gbc.gridx = 1; pnl.add(montarBloco("NOTA FISCAL", txtNotaFiscal), gbc);
+        gbc.gridx = 0; gbc.gridy = 3; pnl.add(montarBloco("LOTE (Identificador) *", txtLote), gbc); gbc.gridx = 1; pnl.add(montarBloco("VALIDADE DO LOTE *", txtValidade), gbc);
+        gbc.gridx = 0; gbc.gridy = 4; pnl.add(montarBloco("CUSTO UNITÁRIO (R$)", txtCompra), gbc); gbc.gridx = 1; pnl.add(montarBloco("VALOR DE VENDA (R$)", txtVenda), gbc);
+        gbc.gridx = 0; gbc.gridy = 5; pnl.add(montarBloco("QTD NA GELADEIRA", spQuantidade), gbc);
+        gbc.gridx = 0; gbc.gridy = 6; gbc.gridwidth = 2; pnl.add(montarBloco("OBSERVAÇÕES", txtObs), gbc);
 
-        JButton btnSalvar = new JButton(" Confirmar Lote"); btnSalvar.setIcon(carregarIcone("disco.svg", 18, Color.WHITE)); btnSalvar.setBackground(Cores.VERDE_AQUA); btnSalvar.setForeground(Color.WHITE); btnSalvar.setFont(new Font("Segoe UI", Font.BOLD, 15)); btnSalvar.setPreferredSize(new Dimension(0, 55)); btnSalvar.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        JButton btnSalvar = new JButton(" Confirmar Lote"); btnSalvar.setIcon(carregarIcone("disco.svg", 18, Color.WHITE)); btnSalvar.setBackground(Cores.VERDE_AQUA); btnSalvar.setForeground(Color.WHITE); btnSalvar.setFont(new Font("Segoe UI", Font.BOLD, 15)); btnSalvar.setPreferredSize(new Dimension(0, 50)); btnSalvar.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         btnSalvar.addActionListener(e -> {
             try {
@@ -218,10 +240,27 @@ public class PainelEstoque extends JPanel {
                 if (val.isBefore(LocalDate.now())) { JOptionPane.showMessageDialog(dialog, "A data de validade informada já passou.\nNão é permitido cadastrar lotes vencidos.", "Data Inválida", JOptionPane.ERROR_MESSAGE); return; }
 
                 double compra = Double.parseDouble(txtCompra.getText().replace(".", "").replace(",", ".")); double venda = Double.parseDouble(txtVenda.getText().replace(".", "").replace(",", "."));
-                Vacina v = new Vacina(); v.setNomeVacina(txtNome.getText().trim()); v.setTipo(cbTipo.getSelectedItem().toString()); v.setLaboratorio(txtLab.getText().trim()); v.setLote(txtLote.getText().trim()); v.setValidade(val); v.setValorCompra(compra); v.setValorVenda(venda); v.setObservacoes(txtObs.getText().trim()); int qtd = (int) spQuantidade.getValue(); v.setQtdDisponivel(qtd);
-                if (vEmEdicao == null || isNovoLote) { v.setQtdTotal(qtd); dao.salvar(v); } else { v.setId(vEmEdicao.getId()); v.setQtdTotal(vEmEdicao.getQtdTotal() == 0 ? qtd : vEmEdicao.getQtdTotal()); dao.atualizar(v); }
+                Vacina v = new Vacina();
+                v.setNomeVacina(txtNome.getText().trim());
+                v.setTipo(cbTipo.getSelectedItem().toString());
+                v.setLaboratorio(txtLab.getText().trim());
+                v.setDistribuidor(txtDistribuidor.getText().trim());
+                v.setNumeroNota(txtNotaFiscal.getText().trim());
+                v.setLote(txtLote.getText().trim());
+                v.setValidade(val);
+                v.setValorCompra(compra);
+                v.setValorVenda(venda);
+                v.setObservacoes(txtObs.getText().trim());
+                int qtd = (int) spQuantidade.getValue();
+                v.setQtdDisponivel(qtd);
+
+                if (vEmEdicao == null || isNovoLote) {
+                    v.setQtdTotal(qtd); dao.salvar(v);
+                } else {
+                    v.setId(vEmEdicao.getId()); v.setQtdTotal(vEmEdicao.getQtdTotal() == 0 ? qtd : vEmEdicao.getQtdTotal()); dao.atualizar(v);
+                }
                 dialog.dispose(); carregarDadosTabela();
-            } catch (Exception ex) { JOptionPane.showMessageDialog(dialog, "Verifique os campos de data.", "Erro", JOptionPane.ERROR_MESSAGE); }
+            } catch (Exception ex) { JOptionPane.showMessageDialog(dialog, "Verifique os campos de data e valores numéricos.", "Erro", JOptionPane.ERROR_MESSAGE); }
         });
 
         JPanel pnlFooter = new JPanel(new BorderLayout()); pnlFooter.setBackground(Color.WHITE); pnlFooter.setBorder(new EmptyBorder(10, 30, 20, 30)); pnlFooter.add(btnSalvar, BorderLayout.CENTER);
@@ -275,8 +314,8 @@ public class PainelEstoque extends JPanel {
     }
 
     private FlatSVGIcon carregarIcone(String nomeArquivo, int tamanho, Color cor) { try { return (FlatSVGIcon) new FlatSVGIcon("icons/" + nomeArquivo, tamanho, tamanho).setColorFilter(new FlatSVGIcon.ColorFilter(c -> cor)); } catch (Exception e) { return null; } }
-    private JTextField criarCampoTexto(String placeholder) { JTextField f = new JTextField(); f.setPreferredSize(new Dimension(0, 45)); f.putClientProperty("JTextField.placeholderText", placeholder); f.setFont(new Font("Segoe UI", Font.PLAIN, 15)); f.setBackground(Color.WHITE); f.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { if (!f.hasFocus()) f.setBackground(new Color(242, 248, 248)); } public void mouseExited(MouseEvent e) { if (!f.hasFocus()) f.setBackground(Color.WHITE); } }); return f; }
-    private void configurarCampoFormatado(JFormattedTextField f) { f.setPreferredSize(new Dimension(0, 45)); f.setFont(new Font("Segoe UI", Font.PLAIN, 15)); f.setBackground(Color.WHITE); f.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { if (!f.hasFocus()) f.setBackground(new Color(242, 248, 248)); } public void mouseExited(MouseEvent e) { if (!f.hasFocus()) f.setBackground(Color.WHITE); } public void mouseClicked(MouseEvent e) { if (f.getText().replaceAll("[^0-9]", "").isEmpty()) f.setCaretPosition(0); }}); f.addFocusListener(new FocusAdapter() { public void focusGained(FocusEvent e) { if (f.getText().replaceAll("[^0-9]", "").isEmpty()) SwingUtilities.invokeLater(() -> f.setCaretPosition(0)); setErroComponente(f, false, null); }}); }
+    private JTextField criarCampoTexto(String placeholder) { JTextField f = new JTextField(); f.setPreferredSize(new Dimension(0, 40)); f.putClientProperty("JTextField.placeholderText", placeholder); f.setFont(new Font("Segoe UI", Font.PLAIN, 15)); f.setBackground(Color.WHITE); f.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { if (!f.hasFocus()) f.setBackground(new Color(242, 248, 248)); } public void mouseExited(MouseEvent e) { if (!f.hasFocus()) f.setBackground(Color.WHITE); } }); return f; }
+    private void configurarCampoFormatado(JFormattedTextField f) { f.setPreferredSize(new Dimension(0, 40)); f.setFont(new Font("Segoe UI", Font.PLAIN, 15)); f.setBackground(Color.WHITE); f.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { if (!f.hasFocus()) f.setBackground(new Color(242, 248, 248)); } public void mouseExited(MouseEvent e) { if (!f.hasFocus()) f.setBackground(Color.WHITE); } public void mouseClicked(MouseEvent e) { if (f.getText().replaceAll("[^0-9]", "").isEmpty()) f.setCaretPosition(0); }}); f.addFocusListener(new FocusAdapter() { public void focusGained(FocusEvent e) { if (f.getText().replaceAll("[^0-9]", "").isEmpty()) SwingUtilities.invokeLater(() -> f.setCaretPosition(0)); setErroComponente(f, false, null); }}); }
     private void aplicarMascara(JFormattedTextField campo, String formato) { try { MaskFormatter mask = new MaskFormatter(formato); mask.setPlaceholderCharacter('_'); mask.install(campo); } catch (Exception e) { } }
     private JPanel montarBloco(String textoLabel, JComponent input) { JPanel p = new JPanel(new BorderLayout(0, 5)); p.setOpaque(false); JLabel l = new JLabel(textoLabel); l.setFont(new Font("Segoe UI", Font.BOLD, 12)); l.setForeground(Cores.CINZA_LABEL); mapLabels.put(input, l); input.putClientProperty("tituloOriginal", textoLabel); p.add(l, BorderLayout.NORTH); p.add(input, BorderLayout.CENTER); return p; }
     private void setErroComponente(JComponent comp, boolean comErro, String msg) { JLabel lbl = mapLabels.get(comp); String original = (String) comp.getClientProperty("tituloOriginal"); if (comErro) { comp.putClientProperty("JComponent.outline", "error"); if (lbl != null && msg != null) { lbl.setText(original + " - " + msg); lbl.setForeground(new Color(220, 53, 69)); } } else { comp.putClientProperty("JComponent.outline", null); if (lbl != null) { lbl.setText(original); lbl.setForeground(Cores.CINZA_LABEL); } } comp.repaint(); }

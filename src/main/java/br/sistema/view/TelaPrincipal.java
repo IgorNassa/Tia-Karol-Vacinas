@@ -78,13 +78,13 @@ public class TelaPrincipal extends JFrame {
 //            br.sistema.util.GerenciadorCaixa.configurarFechamento(tela);
 //
 //            // 2. Exibe a tela de fundo
-//            tela.setVisible(true);
+          tela.setVisible(true);
 //
 //            // 3. Pula o Abertura de Caixa
 //            br.sistema.util.GerenciadorCaixa.iniciarAbertura(tela);
 //
 //            // 4. Pula o Modal de Alertas Críticos do Estoque
-//            br.sistema.view.components.ModalAlertasEstoque.verificarEExibir(tela);
+        br.sistema.view.components.ModalAlertasEstoque.verificarEExibir(tela);
         });
     }
 }

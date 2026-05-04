@@ -12,7 +12,7 @@ public class VacinaDAO {
 
     public VacinaDAO() {
         criarTabelaSeNaoExistir();
-        aplicarMigrations(); // Atualiza o banco velho se necessário
+        aplicarMigrations();
     }
 
     private void criarTabelaSeNaoExistir() {
@@ -23,6 +23,8 @@ public class VacinaDAO {
                 + "lote VARCHAR(100) NOT NULL,"
                 + "validade VARCHAR(20),"
                 + "laboratorio VARCHAR(255),"
+                + "distribuidor VARCHAR(255),"
+                + "numero_nota VARCHAR(100),"
                 + "qtd_total INTEGER,"
                 + "qtd_disponivel INTEGER,"
                 + "valor_compra NUMERIC(10,2),"
@@ -34,65 +36,63 @@ public class VacinaDAO {
              java.sql.Statement stmt = conn.createStatement()) {
             stmt.execute(sql);
         } catch (java.sql.SQLException e) {
-            System.out.println("Erro ao criar tabela vacinas no Postgres: " + e.getMessage());
+            System.out.println("Erro ao criar tabela vacinas no BD: " + e.getMessage());
         }
     }
 
     private void aplicarMigrations() {
-        // Tenta adicionar colunas novas em bancos antigos. Se já existir, ignora o erro.
-        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) {
-            stmt.execute("ALTER TABLE vacinas ADD COLUMN tipo TEXT");
-        } catch (SQLException ignored) {}
-        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) {
-            stmt.execute("ALTER TABLE vacinas ADD COLUMN observacoes TEXT");
-        } catch (SQLException ignored) {}
-        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) {
-            stmt.execute("ALTER TABLE vacinas ADD COLUMN data_cadastro TEXT");
-        } catch (SQLException ignored) {}
+        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute("ALTER TABLE vacinas ADD COLUMN tipo TEXT"); } catch (SQLException ignored) {}
+        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute("ALTER TABLE vacinas ADD COLUMN observacoes TEXT"); } catch (SQLException ignored) {}
+        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute("ALTER TABLE vacinas ADD COLUMN data_cadastro TEXT"); } catch (SQLException ignored) {}
+        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute("ALTER TABLE vacinas ADD COLUMN distribuidor VARCHAR(255)"); } catch (SQLException ignored) {}
+        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute("ALTER TABLE vacinas ADD COLUMN numero_nota VARCHAR(100)"); } catch (SQLException ignored) {}
     }
 
     public void salvar(Vacina v) {
-        String dataHoraAtual = LocalDateTime.now().toString(); // Captura exato momento do clique
+        String dataHoraAtual = LocalDateTime.now().toString();
 
-        String sql = "INSERT INTO vacinas (nome_vacina, tipo, lote, validade, laboratorio, qtd_total, qtd_disponivel, valor_compra, valor_venda, observacoes, data_cadastro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO vacinas (nome_vacina, tipo, lote, validade, laboratorio, distribuidor, numero_nota, qtd_total, qtd_disponivel, valor_compra, valor_venda, observacoes, data_cadastro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, v.getNomeVacina());
             pstmt.setString(2, v.getTipo());
             pstmt.setString(3, v.getLote());
             pstmt.setString(4, v.getValidade() != null ? v.getValidade().toString() : null);
             pstmt.setString(5, v.getLaboratorio());
-            pstmt.setInt(6, v.getQtdTotal());
-            pstmt.setInt(7, v.getQtdDisponivel());
-            pstmt.setDouble(8, v.getValorCompra());
-            pstmt.setDouble(9, v.getValorVenda());
-            pstmt.setString(10, v.getObservacoes());
-            pstmt.setString(11, dataHoraAtual); // Registrando no BD
+            pstmt.setString(6, v.getDistribuidor());
+            pstmt.setString(7, v.getNumeroNota());
+            pstmt.setInt(8, v.getQtdTotal());
+            pstmt.setInt(9, v.getQtdDisponivel());
+            pstmt.setDouble(10, v.getValorCompra());
+            pstmt.setDouble(11, v.getValorVenda());
+            pstmt.setString(12, v.getObservacoes());
+            pstmt.setString(13, dataHoraAtual);
             pstmt.executeUpdate();
         } catch (SQLException e) { System.out.println("Erro ao salvar: " + e.getMessage()); }
     }
 
     public void atualizar(Vacina v) {
-        // Não atualizamos o data_cadastro pois ele é fixo da entrada do lote
-        String sql = "UPDATE vacinas SET nome_vacina = ?, tipo = ?, lote = ?, validade = ?, laboratorio = ?, qtd_total = ?, qtd_disponivel = ?, valor_compra = ?, valor_venda = ?, observacoes = ? WHERE id = ?";
+        String sql = "UPDATE vacinas SET nome_vacina = ?, tipo = ?, lote = ?, validade = ?, laboratorio = ?, distribuidor = ?, numero_nota = ?, qtd_total = ?, qtd_disponivel = ?, valor_compra = ?, valor_venda = ?, observacoes = ? WHERE id = ?";
         try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, v.getNomeVacina());
             pstmt.setString(2, v.getTipo());
             pstmt.setString(3, v.getLote());
             pstmt.setString(4, v.getValidade() != null ? v.getValidade().toString() : null);
             pstmt.setString(5, v.getLaboratorio());
-            pstmt.setInt(6, v.getQtdTotal());
-            pstmt.setInt(7, v.getQtdDisponivel());
-            pstmt.setDouble(8, v.getValorCompra());
-            pstmt.setDouble(9, v.getValorVenda());
-            pstmt.setString(10, v.getObservacoes());
-            pstmt.setInt(11, v.getId());
+            pstmt.setString(6, v.getDistribuidor());
+            pstmt.setString(7, v.getNumeroNota());
+            pstmt.setInt(8, v.getQtdTotal());
+            pstmt.setInt(9, v.getQtdDisponivel());
+            pstmt.setDouble(10, v.getValorCompra());
+            pstmt.setDouble(11, v.getValorVenda());
+            pstmt.setString(12, v.getObservacoes());
+            pstmt.setInt(13, v.getId());
             pstmt.executeUpdate();
         } catch (SQLException e) { System.out.println("Erro ao atualizar: " + e.getMessage()); }
     }
 
     public List<Vacina> listarTodas() {
         List<Vacina> lista = new ArrayList<>();
-        String sql = "SELECT * FROM vacinas ORDER BY id DESC"; // Lotes mais recentes primeiro
+        String sql = "SELECT * FROM vacinas ORDER BY id DESC";
         try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
                 Vacina v = new Vacina();
@@ -105,6 +105,8 @@ public class VacinaDAO {
                 if (dataStr != null && !dataStr.isEmpty()) v.setValidade(LocalDate.parse(dataStr));
 
                 v.setLaboratorio(rs.getString("laboratorio"));
+                v.setDistribuidor(rs.getString("distribuidor"));
+                v.setNumeroNota(rs.getString("numero_nota"));
                 v.setQtdTotal(rs.getInt("qtd_total"));
                 v.setQtdDisponivel(rs.getInt("qtd_disponivel"));
                 v.setValorCompra(rs.getDouble("valor_compra"));
@@ -126,10 +128,6 @@ public class VacinaDAO {
             pstmt.setInt(1, id); pstmt.executeUpdate();
         } catch (SQLException e) { }
     }
-
-    // =========================================================================
-    // MÉTODOS PARA A TELA DE APLICAÇÃO (COMBOBOX E BUSCA DE LOTE ESPECÍFICO)
-    // =========================================================================
 
     public List<String> listarLotesParaCombo() {
         List<String> itens = new ArrayList<>();

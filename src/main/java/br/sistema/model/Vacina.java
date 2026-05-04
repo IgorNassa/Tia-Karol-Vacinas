@@ -6,26 +6,25 @@ import java.time.LocalDateTime;
 public class Vacina {
     private int id;
     private String nomeVacina;
-    private String tipo; // NOVO: Atenuada, Inativada, Conjugada, etc.
+    private String tipo;
     private String lote;
     private LocalDate validade;
     private String laboratorio;
+    private String distribuidor; // NOVO
+    private String numeroNota;   // NOVO
     private int qtdTotal;
     private int qtdDisponivel;
     private double valorCompra;
     private double valorVenda;
-    private String observacoes; // NOVO: Para detalhes da caixa ou transporte
-    private LocalDateTime dataCadastro; // NOVO: Para rastrear a entrada do lote no sistema
+    private String observacoes;
+    private LocalDateTime dataCadastro;
 
     public Vacina() {}
 
-    // Getters e Setters
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
 
     public String getNomeVacina() { return nomeVacina; }
-
-    // INTELIGÊNCIA DE FORMATAÇÃO: Primeira letra sempre maiúscula, o resto minúscula.
     public void setNomeVacina(String nomeVacina) {
         if (nomeVacina != null && !nomeVacina.trim().isEmpty()) {
             String str = nomeVacina.trim().toLowerCase();
@@ -46,6 +45,12 @@ public class Vacina {
 
     public String getLaboratorio() { return laboratorio; }
     public void setLaboratorio(String laboratorio) { this.laboratorio = laboratorio; }
+
+    public String getDistribuidor() { return distribuidor; }
+    public void setDistribuidor(String distribuidor) { this.distribuidor = distribuidor; }
+
+    public String getNumeroNota() { return numeroNota; }
+    public void setNumeroNota(String numeroNota) { this.numeroNota = numeroNota; }
 
     public int getQtdTotal() { return qtdTotal; }
     public void setQtdTotal(int qtdTotal) { this.qtdTotal = qtdTotal; }

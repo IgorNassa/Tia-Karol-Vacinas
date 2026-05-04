@@ -46,27 +46,20 @@ public class PacienteDAO {
         } catch (SQLException e) { } return lista;
     }
 
-    // =========================================================
-    // LÓGICA BLINDADA: VERIFICA OS 3 CPFs (PRÓPRIO E DOS 2 RESPs)
-    // =========================================================
     public List<Paciente> buscarFamiliaresPorCpfResponsavel(String cpfPrincipal, String cpfResp1, String cpfResp2, int idIgnorar) {
         List<Paciente> lista = new ArrayList<>();
         List<String> cpfsValidos = new ArrayList<>();
 
-        // Adiciona à lista de busca apenas CPFs que estão preenchidos de verdade
-        if (cpfPrincipal != null && !cpfPrincipal.trim().isEmpty() && !cpfPrincipal.equals("   .   .   -  ")) cpfsValidos.add(cpfPrincipal);
-        if (cpfResp1 != null && !cpfResp1.trim().isEmpty() && !cpfResp1.equals("   .   .   -  ")) cpfsValidos.add(cpfResp1);
-        if (cpfResp2 != null && !cpfResp2.trim().isEmpty() && !cpfResp2.equals("   .   .   -  ")) cpfsValidos.add(cpfResp2);
+        if (cpfPrincipal != null && !cpfPrincipal.trim().isEmpty() && !cpfPrincipal.contains("   .   .   -  ")) cpfsValidos.add(cpfPrincipal);
+        if (cpfResp1 != null && !cpfResp1.trim().isEmpty() && !cpfResp1.contains("   .   .   -  ")) cpfsValidos.add(cpfResp1);
+        if (cpfResp2 != null && !cpfResp2.trim().isEmpty() && !cpfResp2.contains("   .   .   -  ")) cpfsValidos.add(cpfResp2);
 
         if (cpfsValidos.isEmpty()) return lista;
 
-        // Monta a query dinamicamente dependendo de quantos CPFs a família tem cadastrados
         StringBuilder queryBuilder = new StringBuilder("SELECT * FROM pacientes WHERE id != ? AND (");
-        boolean first = true;
         for (int i = 0; i < cpfsValidos.size(); i++) {
-            if (!first) queryBuilder.append(" OR ");
+            if (i > 0) queryBuilder.append(" OR ");
             queryBuilder.append("(cpf = ? OR cpf_responsavel = ? OR cpf_responsavel_2 = ?)");
-            first = false;
         }
         queryBuilder.append(")");
 
@@ -80,7 +73,7 @@ public class PacienteDAO {
             }
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) lista.add(mapearPaciente(rs));
-        } catch (SQLException e) { System.out.println("Erro ao buscar familiares: " + e.getMessage()); }
+        } catch (SQLException e) { }
 
         return lista;
     }
@@ -100,6 +93,6 @@ public class PacienteDAO {
         String sql = "DELETE FROM pacientes WHERE id = ?";
         try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, id); pstmt.executeUpdate();
-        } catch (SQLException e) { System.out.println("Erro ao excluir: " + e.getMessage()); }
+        } catch (SQLException e) { }
     }
 }

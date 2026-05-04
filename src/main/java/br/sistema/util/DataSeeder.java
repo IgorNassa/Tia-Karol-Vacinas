@@ -19,14 +19,26 @@ public class DataSeeder {
             // 1. GERANDO VACINAS REALISTAS
             System.out.println("💉 Populando Estoque de Vacinas...");
             String[] nomesVacinas = {"BCG", "Hepatite B", "Pentavalente", "Rotavírus", "Pneumocócica 10", "Meningocócica C", "Febre Amarela", "Tríplice Viral", "Varicela", "Hepatite A", "HPV", "Gripe Quadrivalente"};
-            String sqlVacina = "INSERT INTO vacinas (nome_vacina, lote, quantidade_estoque, valor_venda) VALUES (?, ?, ?, ?)";
+            String[] distribuidores = {"Sanofi", "GSK", "Pfizer", "Merck", "Biolab", "Dimed"};
+
+            String sqlVacina = "INSERT INTO vacinas (nome_vacina, lote, qtd_total, qtd_disponivel, valor_compra, valor_venda, distribuidor, numero_nota, data_cadastro) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
             try (PreparedStatement pst = conn.prepareStatement(sqlVacina)) {
                 Random rand = new Random();
                 for (String nome : nomesVacinas) {
+                    int qtd = rand.nextInt(150) + 20; // Estoque entre 20 e 170
+                    double valorVenda = (rand.nextInt(350) + 90) + 0.90;
+                    double valorCompra = valorVenda * 0.4; // Custo de 40% do valor de venda
+
                     pst.setString(1, nome);
                     pst.setString(2, "LOTE-" + (rand.nextInt(9000) + 1000));
-                    pst.setInt(3, rand.nextInt(150) + 20); // Estoque entre 20 e 170
-                    pst.setDouble(4, (rand.nextInt(350) + 90) + 0.90); // Valor entre R$ 90,90 e 440,90
+                    pst.setInt(3, qtd); // qtd_total
+                    pst.setInt(4, qtd); // qtd_disponivel
+                    pst.setDouble(5, valorCompra);
+                    pst.setDouble(6, valorVenda);
+                    pst.setString(7, distribuidores[rand.nextInt(distribuidores.length)]);
+                    pst.setString(8, "NF-" + (rand.nextInt(90000) + 10000));
+                    pst.setString(9, LocalDateTime.now().toString());
                     pst.executeUpdate();
                 }
             }
@@ -56,13 +68,11 @@ public class DataSeeder {
                     pst.setString(4, isHomem ? "Masculino" : "Feminino");
                     pst.setString(5, telefone);
 
-                    // Lógica de Família (Dependentes)
                     if (isMenor) {
                         String pai = nomesHomens[rand.nextInt(nomesHomens.length)] + " " + sobrenomes[rand.nextInt(sobrenomes.length)];
                         String mae = nomesMulheres[rand.nextInt(nomesMulheres.length)] + " " + sobrenomes[rand.nextInt(sobrenomes.length)];
 
-                        // Vamos usar um CPF fixo para criar "Irmãos" aleatoriamente no banco
-                        String cpfRespFam1 = String.format("%03d.000.000-00", rand.nextInt(20)); // CPFs parecidos para agrupar
+                        String cpfRespFam1 = String.format("%03d.000.000-00", rand.nextInt(20));
                         String cpfRespFam2 = String.format("%03d.111.111-11", rand.nextInt(20));
 
                         pst.setString(6, mae);
@@ -78,32 +88,31 @@ public class DataSeeder {
 
             // 3. GERANDO HISTÓRICO DE APLICAÇÕES E AGENDAMENTOS
             System.out.println("📅 Gerando Histórico de 300 Aplicações e Agendamentos...");
-            String sqlApp = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor) VALUES (?, ?, ?, ?, ?, ?)";
+            String sqlApp = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, valor_bruto, desconto, reacoes, observacoes_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
             try (Statement st = conn.createStatement();
                  ResultSet rsPacientes = st.executeQuery("SELECT id FROM pacientes");
                  PreparedStatement pstApp = conn.prepareStatement(sqlApp)) {
 
-                // Pega max ID de vacinas pra não dar erro
                 ResultSet rsVacinas = conn.createStatement().executeQuery("SELECT MAX(id) FROM vacinas");
                 rsVacinas.next();
                 int maxVacinaId = rsVacinas.getInt(1);
 
                 while (rsPacientes.next()) {
                     int pId = rsPacientes.getInt("id");
-                    int qtdVacs = rand.nextInt(5) + 1; // 1 a 5 vacinas por pessoa
+                    int qtdVacs = rand.nextInt(5) + 1;
 
                     for (int v = 0; v < qtdVacs; v++) {
                         int vId = rand.nextInt(maxVacinaId) + 1;
 
-                        boolean isFuturo = rand.nextInt(100) < 30; // 30% de chance de ser agendado pro futuro
+                        boolean isFuturo = rand.nextInt(100) < 30;
                         LocalDateTime dataHora;
                         String status, pagamento;
 
                         if (isFuturo) {
                             dataHora = LocalDateTime.now().plusDays(rand.nextInt(60)).withHour(8 + rand.nextInt(9)).withMinute(0);
                             status = "Agendado";
-                            pagamento = rand.nextBoolean() ? "Pendente" : "PIX"; // Algumas já pagas adiantado
+                            pagamento = rand.nextBoolean() ? "Pendente" : "PIX";
                         } else {
                             dataHora = LocalDateTime.now().minusDays(rand.nextInt(180)).withHour(8 + rand.nextInt(9)).withMinute(0);
                             status = "Aplicado";
@@ -111,12 +120,21 @@ public class DataSeeder {
                             pagamento = formas[rand.nextInt(formas.length)];
                         }
 
+                        double valorBruto = (rand.nextInt(350) + 90) + 0.90;
+                        double desconto = rand.nextInt(100) < 20 ? (rand.nextInt(30) + 10) : 0.0; // 20% de chance de ter desconto entre R$ 10 e R$ 40
+                        double valorLiquido = valorBruto - desconto;
+
                         pstApp.setInt(1, pId);
                         pstApp.setInt(2, vId);
                         pstApp.setTimestamp(3, java.sql.Timestamp.valueOf(dataHora));
                         pstApp.setString(4, status);
                         pstApp.setString(5, pagamento);
-                        pstApp.setDouble(6, (rand.nextInt(350) + 90) + 0.90);
+                        pstApp.setDouble(6, valorLiquido);
+                        pstApp.setDouble(7, valorBruto);
+                        pstApp.setDouble(8, Math.max(0, desconto));
+                        pstApp.setString(9, "Nenhuma reação relatada.");
+                        pstApp.setString(10, status.equals("Aplicado") ? "[CONCLUÍDO] Nenhuma observação geral." : "");
+
                         pstApp.executeUpdate();
                     }
                 }
