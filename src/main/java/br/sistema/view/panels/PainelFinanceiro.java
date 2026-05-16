@@ -13,6 +13,7 @@ import br.sistema.util.Cores;
 import br.sistema.view.TelaPrincipal;
 import br.sistema.view.components.GlassPanel;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
+import com.formdev.flatlaf.ui.FlatLineBorder;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -32,6 +33,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 public class PainelFinanceiro extends JPanel {
     private TelaPrincipal frame;
@@ -44,6 +46,7 @@ public class PainelFinanceiro extends JPanel {
 
     private JPanel pnlConteudoDinamico;
     private JLabel lblEntradas, lblSaidas, lblLucro;
+    private JComboBox<String> cbPeriodo;
 
     public PainelFinanceiro(TelaPrincipal frame) {
         this.frame = frame;
@@ -56,36 +59,84 @@ public class PainelFinanceiro extends JPanel {
         atualizarCards();
     }
 
+    private LocalDate[] getPeriodoSelecionado() {
+        int sel = cbPeriodo != null ? cbPeriodo.getSelectedIndex() : 0;
+        LocalDate hoje = LocalDate.now();
+        if (sel == 12) { // 12 é o índice do "Todo o Período"
+            return new LocalDate[]{LocalDate.of(2000, 1, 1), LocalDate.of(2100, 1, 1)};
+        } else {
+            LocalDate target = hoje.minusMonths(sel);
+            return new LocalDate[]{target.withDayOfMonth(1), target.withDayOfMonth(target.lengthOfMonth())};
+        }
+    }
+
     private void atualizarCards() {
         double entradas = 0, saidas = 0;
 
-        try { for (Aplicacao a : aplicacaoDAO.listarTodas()) entradas += a.getValor(); } catch (Exception e) {}
+        LocalDate[] per = getPeriodoSelecionado();
+        LocalDate ini = per[0];
+        LocalDate fim = per[1];
 
-        try (Connection c = ConnectionFactory.getConnection(); PreparedStatement p = c.prepareStatement("SELECT SUM(valor) FROM lancamentos_outros WHERE tipo = ?")) {
-            p.setString(1, "Entrada avulsa");
-            try (ResultSet rs = p.executeQuery()) { if (rs.next()) entradas += rs.getDouble(1); }
-        } catch (Exception e) {}
+        String dbIni = ini.toString();
+        String dbFim = fim.toString();
 
+        // 1. Entradas de Aplicações
         try {
-            for (Vacina v : vacinaDAO.listarTodas()) {
-                // Considera a QtdTotal comprada como custo, se existir. Senão usa a atual.
-                int qtdParaCalculo = v.getQtdTotal() > 0 ? v.getQtdTotal() : v.getQtdDisponivel();
-                saidas += (qtdParaCalculo * v.getValorCompra());
+            for (Aplicacao a : aplicacaoDAO.listarTodas()) {
+                if (a.getFormaPagamento().equalsIgnoreCase("Pendente")) continue;
+                if (a.getDataHora() != null) {
+                    LocalDate d = a.getDataHora().toLocalDate();
+                    if (!d.isBefore(ini) && !d.isAfter(fim)) {
+                        entradas += a.getValor();
+                    }
+                }
             }
         } catch (Exception e) {}
 
-        try (Connection c = ConnectionFactory.getConnection(); Statement s = c.createStatement(); ResultSet rs = s.executeQuery("SELECT SUM(valor_pago) FROM historico_despesas")) {
-            if (rs.next()) saidas += rs.getDouble(1);
+        // 2. Entradas e Saídas Avulsas
+        try {
+            for(LancamentoOutros l : outrosDAO.listarTodos()) {
+                if (l.getDataLancamento() != null) {
+                    LocalDate d = l.getDataLancamento();
+                    if (!d.isBefore(ini) && !d.isAfter(fim)) {
+                        if (l.getTipo().equalsIgnoreCase("Entrada avulsa")) entradas += l.getValor();
+                        else if (l.getTipo().equalsIgnoreCase("Saída avulsa")) saidas += l.getValor();
+                    }
+                }
+            }
         } catch (Exception e) {}
 
-        try (Connection c = ConnectionFactory.getConnection(); PreparedStatement p = c.prepareStatement("SELECT SUM(valor) FROM lancamentos_outros WHERE tipo = ?")) {
-            p.setString(1, "Saída avulsa");
-            try (ResultSet rs = p.executeQuery()) { if (rs.next()) saidas += rs.getDouble(1); }
+        // 3. Custo de Vacinas Compradas
+        try {
+            for (Vacina v : vacinaDAO.listarTodas()) {
+                if (v.getDataCadastro() != null) {
+                    LocalDate d = v.getDataCadastro().toLocalDate();
+                    if (!d.isBefore(ini) && !d.isAfter(fim)) {
+                        int qtdParaCalculo = v.getQtdTotal() > 0 ? v.getQtdTotal() : v.getQtdDisponivel();
+                        saidas += (qtdParaCalculo * v.getValorCompra());
+                    }
+                } else if (cbPeriodo != null && cbPeriodo.getSelectedIndex() == 12) {
+                    // Cobre vacinas antigas sem data se escolher "Todo o Período"
+                    int qtdParaCalculo = v.getQtdTotal() > 0 ? v.getQtdTotal() : v.getQtdDisponivel();
+                    saidas += (qtdParaCalculo * v.getValorCompra());
+                }
+            }
         } catch (Exception e) {}
 
-        lblEntradas.setText(String.format("R$ %,.2f", entradas));
-        lblSaidas.setText(String.format("R$ %,.2f", saidas));
-        lblLucro.setText(String.format("R$ %,.2f", entradas - saidas));
+        // 4. Despesas Fixas Pagas
+        try (Connection c = ConnectionFactory.getConnection();
+             PreparedStatement p = c.prepareStatement("SELECT data_pagamento, valor_pago FROM historico_despesas WHERE data_pagamento BETWEEN ? AND ?")) {
+            p.setString(1, dbIni);
+            p.setString(2, dbFim);
+            try (ResultSet rs = p.executeQuery()) {
+                while (rs.next()) saidas += rs.getDouble("valor_pago");
+            }
+        } catch (Exception e) {}
+
+        Locale br = new Locale("pt", "BR");
+        lblEntradas.setText(String.format(br, "R$ %,.2f", entradas));
+        lblSaidas.setText(String.format(br, "R$ %,.2f", saidas));
+        lblLucro.setText(String.format(br, "R$ %,.2f", entradas - saidas));
     }
 
     private void montarInterface() {
@@ -93,35 +144,92 @@ public class PainelFinanceiro extends JPanel {
         cardVidro.setLayout(new BorderLayout());
         cardVidro.setBorder(new EmptyBorder(25, 35, 30, 35));
 
-        JPanel header = new JPanel(new BorderLayout()); header.setOpaque(false); header.setBorder(new EmptyBorder(0, 0, 20, 0));
-        JLabel titulo = new JLabel("Lançamentos Financeiros"); titulo.setFont(new Font("Segoe UI Semilight", Font.PLAIN, 32)); titulo.setForeground(Cores.CINZA_GRAFITE);
+        JPanel header = new JPanel(new BorderLayout());
+        header.setOpaque(false);
+        header.setBorder(new EmptyBorder(0, 0, 20, 0));
+
+        JLabel titulo = new JLabel("Lançamentos Financeiros");
+        titulo.setFont(new Font("Segoe UI Semilight", Font.PLAIN, 32));
+        titulo.setForeground(Cores.CINZA_GRAFITE);
         header.add(titulo, BorderLayout.WEST);
 
-        JButton btnRelatorio = new JButton(" Imprimir Relatório");
+        // Barra direita do Header (Filtro Mensal Dinâmico)
+        JPanel pnlAcoesHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
+        pnlAcoesHeader.setOpaque(false);
+
+        JLabel lblFiltro = new JLabel("Visualizando:");
+        lblFiltro.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        lblFiltro.setForeground(Cores.CINZA_LABEL);
+
+        // MÁGICA: Preenchendo dinamicamente os últimos 12 meses
+        cbPeriodo = new JComboBox<>();
+        cbPeriodo.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        cbPeriodo.setPreferredSize(new Dimension(240, 42));
+        cbPeriodo.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        cbPeriodo.putClientProperty("JComponent.roundRect", true);
+
+        LocalDate dt = LocalDate.now();
+        Locale br = new Locale("pt", "BR");
+        for (int i = 0; i < 12; i++) {
+            LocalDate temp = dt.minusMonths(i);
+            String mes = temp.getMonth().getDisplayName(java.time.format.TextStyle.FULL, br);
+            mes = mes.substring(0, 1).toUpperCase() + mes.substring(1);
+            if (i == 0) cbPeriodo.addItem("Mês Atual (" + mes + "/" + temp.getYear() + ")");
+            else if (i == 1) cbPeriodo.addItem("Mês Anterior (" + mes + "/" + temp.getYear() + ")");
+            else cbPeriodo.addItem(mes + " de " + temp.getYear());
+        }
+        cbPeriodo.addItem("Todo o Período Histórico");
+
+        cbPeriodo.addActionListener(e -> {
+            atualizarCards();
+            carregarAbaAtiva(); // Recarrega a tabela debaixo também!
+        });
+
+        JButton btnRelatorio = new JButton(" Exportar / Imprimir");
         btnRelatorio.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btnRelatorio.setBackground(Cores.CINZA_GRAFITE);
         btnRelatorio.setForeground(Color.WHITE);
+        btnRelatorio.setPreferredSize(new Dimension(190, 42));
+        btnRelatorio.putClientProperty("JButton.buttonType", "roundRect");
         btnRelatorio.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        try { btnRelatorio.setIcon(new FlatSVGIcon("icons/imprimir.svg", 18, 18).setColorFilter(new FlatSVGIcon.ColorFilter(c -> Color.WHITE))); } catch(Exception e){}
+        try { btnRelatorio.setIcon(new FlatSVGIcon("icons/imprimir.svg", 16, 16).setColorFilter(new FlatSVGIcon.ColorFilter(c -> Color.WHITE))); } catch(Exception e){}
         btnRelatorio.addActionListener(e -> abrirModalRelatorio());
-        header.add(btnRelatorio, BorderLayout.EAST);
 
-        JPanel pnlCards = new JPanel(new GridLayout(1, 3, 20, 0)); pnlCards.setOpaque(false);
+        pnlAcoesHeader.add(lblFiltro);
+        pnlAcoesHeader.add(cbPeriodo);
+        pnlAcoesHeader.add(btnRelatorio);
+        header.add(pnlAcoesHeader, BorderLayout.EAST);
+
+        JPanel pnlCards = new JPanel(new GridLayout(1, 3, 20, 0));
+        pnlCards.setOpaque(false);
         lblEntradas = new JLabel("R$ 0,00"); lblSaidas = new JLabel("R$ 0,00"); lblLucro = new JLabel("R$ 0,00");
-        pnlCards.add(criarMiniCard("Receitas Totais", lblEntradas, new Color(46, 204, 113)));
+        pnlCards.add(criarMiniCard("Receitas Totais", lblEntradas, new Color(39, 174, 96)));
         pnlCards.add(criarMiniCard("Despesas Totais", lblSaidas, new Color(231, 76, 60)));
-        pnlCards.add(criarMiniCard("Lucro Líquido", lblLucro, Cores.VERDE_AQUA));
+        pnlCards.add(criarMiniCard("Lucro Líquido", lblLucro, new Color(41, 128, 185)));
 
-        JPanel topo = new JPanel(new BorderLayout(0, 15)); topo.setOpaque(false); topo.add(header, BorderLayout.NORTH); topo.add(pnlCards, BorderLayout.CENTER);
+        JPanel topo = new JPanel(new BorderLayout(0, 15));
+        topo.setOpaque(false);
+        topo.add(header, BorderLayout.NORTH);
+        topo.add(pnlCards, BorderLayout.CENTER);
 
-        JPanel painelAbas = new JPanel(new FlowLayout(FlowLayout.LEFT, 30, 0)); painelAbas.setOpaque(false); painelAbas.setBorder(new EmptyBorder(20, 0, 10, 0));
-        painelAbas.add(criarBotaoAba("Aplicações", true)); painelAbas.add(criarBotaoAba("Vacinas", false));
-        painelAbas.add(criarBotaoAba("Fixos", false)); painelAbas.add(criarBotaoAba("Outros", false));
+        JPanel painelAbas = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
+        painelAbas.setOpaque(false);
+        painelAbas.setBorder(new EmptyBorder(25, 0, 10, 0));
+        painelAbas.add(criarBotaoAba("Aplicações", true));
+        painelAbas.add(criarBotaoAba("Vacinas", false));
+        painelAbas.add(criarBotaoAba("Fixos", false));
+        painelAbas.add(criarBotaoAba("Outros", false));
 
-        pnlConteudoDinamico = new JPanel(new BorderLayout()); pnlConteudoDinamico.setOpaque(false);
-        JPanel pnlSuper = new JPanel(new BorderLayout()); pnlSuper.setOpaque(false); pnlSuper.add(topo, BorderLayout.NORTH); pnlSuper.add(painelAbas, BorderLayout.CENTER);
+        pnlConteudoDinamico = new JPanel(new BorderLayout());
+        pnlConteudoDinamico.setOpaque(false);
+        JPanel pnlSuper = new JPanel(new BorderLayout());
+        pnlSuper.setOpaque(false);
+        pnlSuper.add(topo, BorderLayout.NORTH);
+        pnlSuper.add(painelAbas, BorderLayout.CENTER);
 
-        cardVidro.add(pnlSuper, BorderLayout.NORTH); cardVidro.add(pnlConteudoDinamico, BorderLayout.CENTER); add(cardVidro, BorderLayout.CENTER);
+        cardVidro.add(pnlSuper, BorderLayout.NORTH);
+        cardVidro.add(pnlConteudoDinamico, BorderLayout.CENTER);
+        add(cardVidro, BorderLayout.CENTER);
     }
 
     private void carregarAbaAtiva() {
@@ -136,7 +244,7 @@ public class PainelFinanceiro extends JPanel {
     }
 
     // =========================================================
-    // MÓDULO DE RELATÓRIO
+    // MÓDULO DE RELATÓRIO PDF
     // =========================================================
 
     class RegistroLinha implements Comparable<RegistroLinha> {
@@ -152,11 +260,18 @@ public class PainelFinanceiro extends JPanel {
         diag.setSize(450, 320); diag.setLocationRelativeTo(frame); diag.getContentPane().setBackground(Color.WHITE);
         JPanel p = new JPanel(new GridLayout(2, 1, 15, 15)); p.setBackground(Color.WHITE); p.setBorder(new EmptyBorder(30, 40, 20, 40));
 
-        SpinnerDateModel modelIni = new SpinnerDateModel(new java.util.Date(), null, null, java.util.Calendar.DAY_OF_MONTH);
+        // Pega as datas padronizadas baseadas no combobox para não forçar o usuário a mudar toda hora
+        LocalDate[] per = getPeriodoSelecionado();
+        LocalDate dtI = per[0];
+        LocalDate dtF = per[1];
+        if (dtF.isAfter(LocalDate.now())) dtF = LocalDate.now();
+        if (cbPeriodo.getSelectedIndex() == 12) dtI = LocalDate.now().minusDays(30);
+
+        SpinnerDateModel modelIni = new SpinnerDateModel(java.sql.Date.valueOf(dtI), null, null, java.util.Calendar.DAY_OF_MONTH);
         JSpinner spnIni = new JSpinner(modelIni); spnIni.setEditor(new JSpinner.DateEditor(spnIni, "dd/MM/yyyy"));
         spnIni.setFont(new Font("Segoe UI", Font.PLAIN, 16)); spnIni.setPreferredSize(new Dimension(0, 45));
 
-        SpinnerDateModel modelFim = new SpinnerDateModel(new java.util.Date(), null, null, java.util.Calendar.DAY_OF_MONTH);
+        SpinnerDateModel modelFim = new SpinnerDateModel(java.sql.Date.valueOf(dtF), null, null, java.util.Calendar.DAY_OF_MONTH);
         JSpinner spnFim = new JSpinner(modelFim); spnFim.setEditor(new JSpinner.DateEditor(spnFim, "dd/MM/yyyy"));
         spnFim.setFont(new Font("Segoe UI", Font.PLAIN, 16)); spnFim.setPreferredSize(new Dimension(0, 45));
 
@@ -175,7 +290,6 @@ public class PainelFinanceiro extends JPanel {
         diag.add(p, BorderLayout.CENTER); diag.add(pBot, BorderLayout.SOUTH); diag.setVisible(true);
     }
 
-    // AGORA ESTÁ PÚBLICO! A Data da vacina puxa o Cadastro real daquele lote.
     public void gerarEImprimirRelatorio(LocalDate ini, LocalDate fim) {
         String dbIni = ini.toString(); String dbFim = fim.toString();
         DateTimeFormatter brFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -183,12 +297,9 @@ public class PainelFinanceiro extends JPanel {
         double totAplica = 0, totAvulsosEntrada = 0, totAvulsosSaida = 0, totFixos = 0, totVacinas = 0;
         List<RegistroLinha> listaMista = new ArrayList<>();
 
-        // 1. Aplicações
         try {
             for (Aplicacao a : aplicacaoDAO.listarTodas()) {
-                if (a.getFormaPagamento().equalsIgnoreCase("Pendente")) {
-                    continue;
-                }
+                if (a.getFormaPagamento().equalsIgnoreCase("Pendente")) continue;
                 if (a.getDataHora() != null) {
                     LocalDate d = a.getDataHora().toLocalDate();
                     if (!d.isBefore(ini) && !d.isAfter(fim)) {
@@ -200,7 +311,6 @@ public class PainelFinanceiro extends JPanel {
             }
         } catch (Exception e) {}
 
-        // 2. Vacinas (Atualizado para a Data de Cadastro!)
         try {
             for (Vacina v : vacinaDAO.listarTodas()) {
                 if (v.getDataCadastro() != null) {
@@ -218,7 +328,6 @@ public class PainelFinanceiro extends JPanel {
             }
         } catch (Exception e) {}
 
-        // 3. Outros Lançamentos e Fixos
         try (Connection conn = ConnectionFactory.getConnection()) {
             try (PreparedStatement pst = conn.prepareStatement("SELECT nome, data_lancamento, valor FROM lancamentos_outros WHERE tipo = 'Entrada avulsa' AND data_lancamento BETWEEN ? AND ?")) {
                 pst.setString(1, dbIni); pst.setString(2, dbFim);
@@ -251,57 +360,52 @@ public class PainelFinanceiro extends JPanel {
 
         Collections.sort(listaMista);
 
+        Locale br = new Locale("pt", "BR");
         StringBuilder html = new StringBuilder();
-        html.append("<html><body style=\"font-family: sans-serif; color: #333; padding: 20px;\">");
+        html.append("<html><head><style> body { font-family: sans-serif; font-size: 11px; } table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #ddd; padding: 8px; } th { background-color: #f2f2f2; } </style></head><body>");
 
-        html.append("<h1 align=\"center\" style=\"color: #1E6669; margin-bottom: 5px;\">RELATÓRIO DE CAIXA DIÁRIO/PERÍODO</h1>");
-        html.append("<p align=\"center\" style=\"color: #666; margin-top: 0;\">Período Selecionado: <b>").append(ini.format(brFmt)).append("</b> até <b>").append(fim.format(brFmt)).append("</b></p><br>");
+        html.append("<h2 align=\"center\" style=\"color: #1E6669; margin-bottom: 5px;\">RELATÓRIO DE CAIXA</h2>");
+        html.append("<p align=\"center\" style=\"color: #666; margin-top: 0;\">Período: <b>").append(ini.format(brFmt)).append("</b> até <b>").append(fim.format(brFmt)).append("</b></p><br>");
 
-        html.append("<table width=\"100%\" cellpadding=\"10\" cellspacing=\"0\" border=\"1\" bordercolor=\"#e0e0e0\">");
-        html.append("<tr bgcolor=\"#1E6669\">");
-        html.append("<th align=\"center\"><font color=\"white\">Data</font></th>");
-        html.append("<th align=\"left\"><font color=\"white\">Descrição do Movimento</font></th>");
-        html.append("<th align=\"center\"><font color=\"white\">Categoria</font></th>");
-        html.append("<th align=\"right\"><font color=\"white\">Valor Total</font></th>");
-        html.append("</tr>");
+        html.append("<table><tr><th>Data</th><th>Descrição do Movimento</th><th>Categoria</th><th>Valor</th></tr>");
 
-        boolean zebra = false;
         for (RegistroLinha r : listaMista) {
-            String bg = zebra ? "#f9fbfb" : "#ffffff"; zebra = !zebra;
-            String valStr = String.format("R$ %.2f", r.valor);
-            String corTexto = r.isEntrada ? "#27ae60" : "#c0392b";
+            String valStr = String.format(br, "R$ %,.2f", r.valor);
+            String corTexto = r.isEntrada ? "green" : "red";
             String prefixo = r.isEntrada ? "+ " : "- ";
-
-            html.append("<tr bgcolor=\"").append(bg).append("\">");
-            html.append("<td align=\"center\">").append(r.dataExibicao).append("</td>");
-            html.append("<td align=\"left\">").append(r.descricao).append("</td>");
+            html.append("<tr><td align=\"center\">").append(r.dataExibicao).append("</td>");
+            html.append("<td>").append(r.descricao).append("</td>");
             html.append("<td align=\"center\">").append(r.categoria).append("</td>");
-            html.append("<td align=\"right\"><b><font color=\"").append(corTexto).append("\">").append(prefixo).append(valStr).append("</font></b></td>");
-            html.append("</tr>");
+            html.append("<td align=\"right\" style=\"color:").append(corTexto).append(";\">").append(prefixo).append(valStr).append("</td></tr>");
         }
 
-        if (listaMista.isEmpty()) html.append("<tr><td colspan=\"4\" align=\"center\">Nenhum lançamento registrado neste período.</td></tr>");
-        html.append("</table><br><br>");
+        if (listaMista.isEmpty()) html.append("<tr><td colspan=\"4\" align=\"center\">Nenhum lançamento no período.</td></tr>");
+        html.append("</table>");
 
-        html.append("<table width=\"100%\" cellpadding=\"8\" cellspacing=\"0\" border=\"1\" bordercolor=\"#e0e0e0\">");
-        html.append("<tr bgcolor=\"#f4f6f7\"><td colspan=\"2\"><b><font size=\"4\" color=\"#2c3e50\"> Detalhamento de Resultados</font></b></td></tr>");
-        html.append("<tr><td>Receitas de Vacinação (Aplicações)</td><td align=\"right\"><b><font color=\"#27ae60\">R$ ").append(String.format("%.2f", totAplica)).append("</font></b></td></tr>");
-        html.append("<tr><td>Entradas Diversas (Avulsos)</td><td align=\"right\"><b><font color=\"#27ae60\">R$ ").append(String.format("%.2f", totAvulsosEntrada)).append("</font></b></td></tr>");
-        html.append("<tr><td>Saídas Diversas (Avulsos)</td><td align=\"right\"><b><font color=\"#c0392b\">- R$ ").append(String.format("%.2f", totAvulsosSaida)).append("</font></b></td></tr>");
-        html.append("<tr><td>Pagamento de Despesas Fixas</td><td align=\"right\"><b><font color=\"#c0392b\">- R$ ").append(String.format("%.2f", totFixos)).append("</font></b></td></tr>");
-        html.append("<tr><td>Custo Imobilizado (Compra de Vacinas no Período)</td><td align=\"right\"><b><font color=\"#c0392b\">- R$ ").append(String.format("%.2f", totVacinas)).append("</font></b></td></tr>");
-        html.append("</table><br><br>");
+        html.append("<br><br><table style=\"page-break-inside: avoid;\" width=\"100%\" border=\"0\"><tr><td>");
+        html.append("<h3>Detalhamento</h3>");
+        html.append("<table>");
+        html.append("<tr><td>Receitas de Vacinação (Aplicações)</td><td align=\"right\" style=\"color: green;\">R$ ").append(String.format(br, "%,.2f", totAplica)).append("</td></tr>");
+        html.append("<tr><td>Entradas Diversas (Avulsos)</td><td align=\"right\" style=\"color: green;\">R$ ").append(String.format(br, "%,.2f", totAvulsosEntrada)).append("</td></tr>");
+        html.append("<tr><td>Saídas Diversas (Avulsos)</td><td align=\"right\" style=\"color: red;\">- R$ ").append(String.format(br, "%,.2f", totAvulsosSaida)).append("</td></tr>");
+        html.append("<tr><td>Pagamento de Despesas Fixas</td><td align=\"right\" style=\"color: red;\">- R$ ").append(String.format(br, "%,.2f", totFixos)).append("</td></tr>");
+        html.append("<tr><td>Custo Imobilizado (Vacinas Compradas)</td><td align=\"right\" style=\"color: red;\">- R$ ").append(String.format(br, "%,.2f", totVacinas)).append("</td></tr>");
+        html.append("</table>");
+        html.append("</td></tr></table>");
 
         double superEntradas = totAplica + totAvulsosEntrada;
         double superSaidas = totFixos + totAvulsosSaida + totVacinas;
         double superLucro = superEntradas - superSaidas;
-        String corLucro = superLucro >= 0 ? "#2980b9" : "#c0392b";
+        String corLucro = superLucro >= 0 ? "blue" : "red";
 
-        html.append("<table width=\"100%\" cellpadding=\"15\" cellspacing=\"0\" border=\"0\"><tr>");
-        html.append("<td width=\"33%\" bgcolor=\"#e8f8f5\" align=\"center\" style=\"border: 1px solid #a3e4d7;\"><font color=\"#27ae60\">ENTRADAS TOTAIS<br><b><font size=\"5\">R$ ").append(String.format("%.2f", superEntradas)).append("</font></b></font></td><td width=\"2%\"></td>");
-        html.append("<td width=\"33%\" bgcolor=\"#fdedec\" align=\"center\" style=\"border: 1px solid #f5b7b1;\"><font color=\"#c0392b\">SAÍDAS TOTAIS<br><b><font size=\"5\">- R$ ").append(String.format("%.2f", superSaidas)).append("</font></b></font></td><td width=\"2%\"></td>");
-        html.append("<td width=\"30%\" bgcolor=\"#eaf2f8\" align=\"center\" style=\"border: 1px solid #a9cce3;\"><font color=\"").append(corLucro).append("\">SALDO DO PERÍODO<br><b><font size=\"5\">R$ ").append(String.format("%.2f", superLucro)).append("</font></b></font></td>");
-        html.append("</tr></table></body></html>");
+        html.append("<br><br><table style=\"page-break-inside: avoid;\" width=\"100%\" border=\"0\"><tr><td>");
+        html.append("<h3>Resumo Final</h3>");
+        html.append("<table><tr bgcolor=\"#f4f6f7\"><th>ENTRADAS TOTAIS</th><th>SAÍDAS TOTAIS</th><th>SALDO LÍQUIDO</th></tr>");
+        html.append("<tr><td align=\"center\" style=\"color: green; font-weight: bold;\">R$ ").append(String.format(br, "%,.2f", superEntradas)).append("</td>");
+        html.append("<td align=\"center\" style=\"color: red; font-weight: bold;\">- R$ ").append(String.format(br, "%,.2f", superSaidas)).append("</td>");
+        html.append("<td align=\"center\" style=\"color: ").append(corLucro).append("; font-weight: bold;\">R$ ").append(String.format(br, "%,.2f", superLucro)).append("</td></tr>");
+        html.append("</table>");
+        html.append("</td></tr></table></body></html>");
 
         JDialog previewDialog = new JDialog(frame, "Visualização do Relatório (PDF)", true);
         previewDialog.setSize(800, 750); previewDialog.setLocationRelativeTo(frame);
@@ -328,16 +432,25 @@ public class PainelFinanceiro extends JPanel {
     // ABA APLICAÇÕES
     // =========================================================
     private void renderizarAbaAplicacoes() {
-        String[] cols = {"ID", "PACIENTE", "DATA APLICAÇÃO", "VALOR COBRADO"};
+        String[] cols = {"ID", "PACIENTE", "DATA APLICAÇÃO", "VALOR LÍQUIDO", "PAGAMENTO"};
         DefaultTableModel model = new DefaultTableModel(null, cols) { public boolean isCellEditable(int r, int c) { return false; } };
         JTable tab = new JTable(model); formatarTabela(tab);
 
         List<Aplicacao> listaApps = aplicacaoDAO.listarTodas();
         DateTimeFormatter f = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        Locale br = new Locale("pt", "BR");
+
+        LocalDate[] per = getPeriodoSelecionado();
+
         for (Aplicacao app : listaApps) {
+            if(app.getDataHora() != null) {
+                LocalDate d = app.getDataHora().toLocalDate();
+                if(d.isBefore(per[0]) || d.isAfter(per[1])) continue; // Filtra a tabela!
+            }
+
             String data = app.getDataHora() != null ? app.getDataHora().format(f) : "-";
             String nomePac = app.getPaciente() != null && app.getPaciente().getNome() != null ? app.getPaciente().getNome() : "Desconhecido";
-            model.addRow(new Object[]{app.getId(), nomePac, data, String.format("R$ %.2f", app.getValor())});
+            model.addRow(new Object[]{app.getId(), nomePac, data, String.format(br, "R$ %,.2f", app.getValor()), app.getFormaPagamento()});
         }
 
         JPanel tool = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0)); tool.setOpaque(false);
@@ -351,7 +464,7 @@ public class PainelFinanceiro extends JPanel {
         btnEdit.addActionListener(e -> {
             int r = tab.getSelectedRow(); if (r < 0) return;
             double valorAtual = 0;
-            try { valorAtual = Double.parseDouble(model.getValueAt(r, 3).toString().replace("R$ ", "").replace(",", ".")); } catch (Exception ex) {}
+            try { valorAtual = Double.parseDouble(model.getValueAt(r, 3).toString().replace("R$ ", "").replace(".", "").replace(",", ".")); } catch (Exception ex) {}
 
             abrirModalAlterarValor("Alterar Receita da Aplicação", "Novo valor cobrado pelo serviço (R$):", valorAtual, novoValor -> {
                 try(Connection c = ConnectionFactory.getConnection(); PreparedStatement p = c.prepareStatement("UPDATE aplicacoes_v2 SET valor=? WHERE id=?")) {
@@ -365,7 +478,7 @@ public class PainelFinanceiro extends JPanel {
             int r = tab.getSelectedRow(); if (r < 0) return;
             confirmarExclusaoComDuplaChecagem(
                     "Tem certeza que deseja excluir esta Aplicação Financeira?\n\nCUIDADO: Isso também apagará todo o registro dessa vacina do Prontuário Médico do Paciente!",
-                    "CONFIRMAÇÃO FINAL: EXCLUSÃO DE PRONTUÁRIO\n\nEsta ação não pode ser desfeita. A aplicação será permanentemente deletada do sistema.",
+                    "CONFIRMAÇÃO FINAL: EXCLUSÃO DE PRONTUÁRIO\n\nEsta ação não pode ser desfeita.",
                     () -> {
                         try(Connection c = ConnectionFactory.getConnection(); PreparedStatement p = c.prepareStatement("DELETE FROM aplicacoes_v2 WHERE id=?")) {
                             p.setInt(1, (int)model.getValueAt(r, 0)); p.executeUpdate();
@@ -383,14 +496,25 @@ public class PainelFinanceiro extends JPanel {
     // ABA VACINAS
     // =========================================================
     private void renderizarAbaVacinas() {
-        String[] cols = {"ID", "VACINA", "LOTE", "FORNECEDOR", "QTD", "CUSTO UNIT.", "CUSTO TOTAL"};
+        String[] cols = {"ID", "VACINA", "LOTE", "DISTRIBUIDOR", "QTD COMPRADA", "CUSTO UNIT.", "CUSTO TOTAL"};
         DefaultTableModel model = new DefaultTableModel(null, cols) { public boolean isCellEditable(int r, int c) { return false; } };
         JTable tab = new JTable(model); formatarTabela(tab);
 
+        Locale br = new Locale("pt", "BR");
+        LocalDate[] per = getPeriodoSelecionado();
         List<Vacina> listaVacinas = vacinaDAO.listarTodas();
+
         for (Vacina v : listaVacinas) {
-            String fornecedor = v.getLaboratorio() != null && !v.getLaboratorio().isEmpty() ? v.getLaboratorio() : "Não informado";
-            model.addRow(new Object[]{ v.getId(), v.getNomeVacina(), v.getLote(), fornecedor, v.getQtdDisponivel(), String.format("R$ %.2f", v.getValorCompra()), String.format("R$ %.2f", v.getValorCompra() * v.getQtdDisponivel()) });
+            if(v.getDataCadastro() != null) {
+                LocalDate d = v.getDataCadastro().toLocalDate();
+                if(d.isBefore(per[0]) || d.isAfter(per[1])) continue;
+            } else if (cbPeriodo != null && cbPeriodo.getSelectedIndex() != 12) {
+                continue; // Vacinas sem data só aparecem em "Todo o período"
+            }
+
+            String distribuidor = v.getDistribuidor() != null && !v.getDistribuidor().isEmpty() ? v.getDistribuidor() : "Não informado";
+            int qtdParaCalculo = v.getQtdTotal() > 0 ? v.getQtdTotal() : v.getQtdDisponivel();
+            model.addRow(new Object[]{ v.getId(), v.getNomeVacina(), v.getLote(), distribuidor, qtdParaCalculo, String.format(br, "R$ %,.2f", v.getValorCompra()), String.format(br, "R$ %,.2f", v.getValorCompra() * qtdParaCalculo) });
         }
 
         JPanel tool = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0)); tool.setOpaque(false);
@@ -404,17 +528,13 @@ public class PainelFinanceiro extends JPanel {
         btnEdit.addActionListener(e -> {
             int r = tab.getSelectedRow(); if (r < 0) return;
             double valorAtual = 0;
-            try { valorAtual = Double.parseDouble(model.getValueAt(r, 5).toString().replace("R$ ", "").replace(",", ".")); } catch (Exception ex) {}
+            try { valorAtual = Double.parseDouble(model.getValueAt(r, 5).toString().replace("R$ ", "").replace(".", "").replace(",", ".")); } catch (Exception ex) {}
 
             abrirModalAlterarValor("Alterar Custo de Estoque", "Novo valor unitário pago na compra (R$):", valorAtual, novoValor -> {
                 int id = (int)model.getValueAt(r, 0);
                 try(Connection c = ConnectionFactory.getConnection(); PreparedStatement p = c.prepareStatement("UPDATE vacinas SET valor_compra=? WHERE id=?")) {
                     p.setDouble(1, novoValor); p.setInt(2, id); p.executeUpdate();
-                } catch(Exception ex) {
-                    try(Connection c = ConnectionFactory.getConnection(); PreparedStatement p2 = c.prepareStatement("UPDATE vacinas SET valorCompra=? WHERE id=?")) {
-                        p2.setDouble(1, novoValor); p2.setInt(2, id); p2.executeUpdate();
-                    } catch(Exception ex2) {}
-                }
+                } catch(Exception ex) {}
                 carregarAbaAtiva(); atualizarCards();
             });
         });
@@ -422,8 +542,8 @@ public class PainelFinanceiro extends JPanel {
         btnDel.addActionListener(e -> {
             int r = tab.getSelectedRow(); if (r < 0) return;
             confirmarExclusaoComDuplaChecagem(
-                    "Tem certeza que deseja excluir este custo de Vacina?\n\nCUIDADO: Isso também APAGARÁ todo o lote dessa vacina fisicamente do seu Estoque!",
-                    "CONFIRMAÇÃO FINAL: EXCLUSÃO DE ESTOQUE\n\nEsta ação não pode ser desfeita. O lote será permanentemente deletado do inventário da clínica.",
+                    "Excluir este custo apagará todo o lote dessa vacina fisicamente do Estoque!",
+                    "CONFIRMAÇÃO FINAL: O lote será permanentemente deletado do inventário.",
                     () -> {
                         try(Connection c = ConnectionFactory.getConnection(); PreparedStatement p = c.prepareStatement("DELETE FROM vacinas WHERE id=?")) {
                             p.setInt(1, (int)model.getValueAt(r, 0)); p.executeUpdate();
@@ -460,8 +580,14 @@ public class PainelFinanceiro extends JPanel {
 
         List<LancamentoOutros> lista = outrosDAO.listarTodos();
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        Locale br = new Locale("pt", "BR");
+
+        LocalDate[] per = getPeriodoSelecionado();
+
         for (LancamentoOutros l : lista) {
-            model.addRow(new Object[]{l.getId(), l.getNome(), l.getTipo(), l.getDataLancamento().format(fmt), String.format("R$ %.2f", l.getValor())});
+            LocalDate d = l.getDataLancamento();
+            if(d != null && (d.isBefore(per[0]) || d.isAfter(per[1]))) continue;
+            model.addRow(new Object[]{l.getId(), l.getNome(), l.getTipo(), l.getDataLancamento().format(fmt), String.format(br, "R$ %,.2f", l.getValor())});
         }
 
         JPanel tool = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0)); tool.setOpaque(false);
@@ -565,7 +691,7 @@ public class PainelFinanceiro extends JPanel {
             DespesaFixa d = getDespesaFixoSelecionada(); if (d == null) return;
             confirmarExclusaoComDuplaChecagem(
                     "Deseja excluir a despesa '" + d.getNome() + "' e todo o seu histórico financeiro?",
-                    "CONFIRMAÇÃO FINAL: A exclusão desta despesa apagará todos os pagamentos relacionados a ela dos relatórios.",
+                    "CONFIRMAÇÃO FINAL: A exclusão desta despesa apagará todos os pagamentos relacionados a ela.",
                     () -> { despesaDAO.excluir(d.getId()); }
             );
         });
@@ -594,6 +720,8 @@ public class PainelFinanceiro extends JPanel {
 
         listaFixos = despesaDAO.listarTodas();
         LocalDate hoje = LocalDate.now(); DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        Locale br = new Locale("pt", "BR");
+
         for (DespesaFixa d : listaFixos) {
             int diaVenc = Math.min(d.getDiaVencimento(), hoje.lengthOfMonth());
             LocalDate proxVenc = hoje.withDayOfMonth(diaVenc);
@@ -604,7 +732,7 @@ public class PainelFinanceiro extends JPanel {
             }
 
             String tipo = d.isValorVariavel() ? "Variável" : "Fixo";
-            String ultimoPago = d.getUltimoValorPago() > 0 ? String.format("R$ %.2f", d.getUltimoValorPago()) : "Pendente";
+            String ultimoPago = d.getUltimoValorPago() > 0 ? String.format(br, "R$ %,.2f", d.getUltimoValorPago()) : "Pendente";
             model.addRow(new Object[]{ d.getId(), d.getNome(), tipo, proxVenc.format(fmt), ultimoPago });
         }
 
@@ -747,23 +875,84 @@ public class PainelFinanceiro extends JPanel {
 
     private void formatarTabela(JTable t) {
         t.setRowHeight(45); t.setShowVerticalLines(false); t.setFont(new Font("Segoe UI", Font.PLAIN, 15));
-        t.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12)); t.getTableHeader().setBackground(new Color(245, 245, 245));
+        t.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13)); t.getTableHeader().setBackground(new Color(245, 245, 245));
     }
 
     private JPanel criarMiniCard(String titulo, JLabel lblValor, Color cor) {
-        JPanel p = new JPanel(new BorderLayout(5, 5)); p.setBackground(Color.WHITE); p.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(230,230,230)), new EmptyBorder(15, 20, 15, 20)));
-        JLabel t = new JLabel(titulo); t.setFont(new Font("Segoe UI", Font.BOLD, 12)); t.setForeground(Cores.CINZA_LABEL);
-        lblValor.setFont(new Font("Segoe UI", Font.BOLD, 22)); lblValor.setForeground(cor);
-        p.add(t, BorderLayout.NORTH); p.add(lblValor, BorderLayout.CENTER);
-        JPanel base = new JPanel(); base.setPreferredSize(new Dimension(0, 4)); base.setBackground(cor); p.add(base, BorderLayout.SOUTH);
+        JPanel p = new JPanel(new BorderLayout(5, 5));
+        p.setBackground(Color.WHITE);
+
+        // Estética FlatLaf: Borda composta com linha externa sutil + padding interno
+        p.setBorder(BorderFactory.createCompoundBorder(
+                new FlatLineBorder(new Insets(1,1,1,1), new Color(225,230,235), 1.5f, 20),
+                new EmptyBorder(15, 25, 15, 25)
+        ));
+
+        JLabel t = new JLabel(titulo);
+        t.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        t.setForeground(Cores.CINZA_LABEL);
+
+        lblValor.setFont(new Font("Segoe UI", Font.BOLD, 26));
+        lblValor.setForeground(cor);
+
+        p.add(t, BorderLayout.NORTH);
+        p.add(lblValor, BorderLayout.CENTER);
+
+        // Linha inferior colorida com borda arredondada virtual
+        JPanel base = new JPanel();
+        base.setPreferredSize(new Dimension(0, 5));
+        base.setBackground(cor);
+        p.add(base, BorderLayout.SOUTH);
+
         return p;
     }
 
     private JPanel montarBloco(String t, JComponent c) { JPanel p = new JPanel(new BorderLayout(0, 5)); p.setOpaque(false); p.setBackground(Color.WHITE); JLabel l = new JLabel(t); l.setFont(new Font("Segoe UI", Font.BOLD, 12)); l.setForeground(Cores.CINZA_LABEL); p.add(l, BorderLayout.NORTH); p.add(c, BorderLayout.CENTER); return p; }
 
     private JButton criarBotaoAba(String t, boolean a) {
-        JButton b = new JButton(t); b.setFont(new Font("Segoe UI", a ? Font.BOLD : Font.PLAIN, 18)); b.setForeground(a ? Cores.VERDE_AQUA : Cores.CINZA_LABEL); b.setContentAreaFilled(false); b.setBorderPainted(false); b.setFocusPainted(false); b.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        b.addActionListener(e -> { abaAtiva = t; for (Component c : ((JPanel) b.getParent()).getComponents()) { if (c instanceof JButton) { c.setFont(new Font("Segoe UI", Font.PLAIN, 18)); c.setForeground(Cores.CINZA_LABEL); } } b.setFont(new Font("Segoe UI", Font.BOLD, 18)); b.setForeground(Cores.VERDE_AQUA); carregarAbaAtiva(); });
+        JButton b = new JButton(t);
+        b.setFont(new Font("Segoe UI", a ? Font.BOLD : Font.PLAIN, 18));
+        b.setForeground(a ? Cores.VERDE_AQUA : Cores.CINZA_LABEL);
+        b.setContentAreaFilled(false);
+        b.setBorderPainted(true);
+        b.setFocusPainted(false);
+        b.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        // Estilo de Aba tipo "Web" (Underline)
+        if (a) {
+            b.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 4, 0, Cores.VERDE_AQUA),
+                    new EmptyBorder(8, 15, 6, 15)
+            ));
+        } else {
+            b.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(220, 220, 220)),
+                    new EmptyBorder(8, 15, 9, 15)
+            ));
+        }
+
+        b.addActionListener(e -> {
+            abaAtiva = t;
+            for (Component c : ((JPanel) b.getParent()).getComponents()) {
+                if (c instanceof JButton btn) {
+                    boolean isMe = btn.getText().equals(t);
+                    btn.setFont(new Font("Segoe UI", isMe ? Font.BOLD : Font.PLAIN, 18));
+                    btn.setForeground(isMe ? Cores.VERDE_AQUA : Cores.CINZA_LABEL);
+                    if (isMe) {
+                        btn.setBorder(BorderFactory.createCompoundBorder(
+                                BorderFactory.createMatteBorder(0, 0, 4, 0, Cores.VERDE_AQUA),
+                                new EmptyBorder(8, 15, 6, 15)
+                        ));
+                    } else {
+                        btn.setBorder(BorderFactory.createCompoundBorder(
+                                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(220, 220, 220)),
+                                new EmptyBorder(8, 15, 9, 15)
+                        ));
+                    }
+                }
+            }
+            carregarAbaAtiva();
+        });
         return b;
     }
 }
