@@ -23,6 +23,9 @@ public class AplicacaoDAO {
     private void aplicarMigrationsFinanceiras() {
         try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute("ALTER TABLE aplicacoes_v2 ADD COLUMN valor_bruto NUMERIC(10,2)"); } catch (SQLException ignored) {}
         try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute("ALTER TABLE aplicacoes_v2 ADD COLUMN desconto NUMERIC(10,2)"); } catch (SQLException ignored) {}
+        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute("ALTER TABLE aplicacoes_v2 ADD COLUMN local_aplicacao VARCHAR(100)"); } catch (SQLException ignored) {}
+        // Aumenta o tamanho da coluna para aceitar a string do pagamento misto
+        try (Connection conn = ConnectionFactory.getConnection(); Statement stmt = conn.createStatement()) { stmt.execute("ALTER TABLE aplicacoes_v2 ALTER COLUMN forma_pagamento TYPE VARCHAR(500)"); } catch (SQLException ignored) {}
     }
 
     public int buscarQuantidadeReservada(int vacinaId) {
@@ -36,7 +39,7 @@ public class AplicacaoDAO {
     }
 
     public boolean salvarEmLote(List<Aplicacao> aplicacoes) {
-        String sqlApp = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, valor_bruto, desconto, reacoes, observacoes_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sqlApp = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, valor_bruto, desconto, reacoes, observacoes_adicionais, local_aplicacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         String sqlEstoque = "UPDATE vacinas SET qtd_disponivel = qtd_disponivel - 1 WHERE id = ?";
         Connection conn = null;
         try {
@@ -53,6 +56,7 @@ public class AplicacaoDAO {
                     stmtApp.setDouble(8, app.getDesconto());
                     stmtApp.setString(9, app.getReacoes() != null ? app.getReacoes() : "");
                     stmtApp.setString(10, app.getObservacoesAdicionais() != null ? app.getObservacoesAdicionais() : "");
+                    stmtApp.setString(11, app.getLocalAplicacao() != null ? app.getLocalAplicacao() : "");
                     stmtApp.executeUpdate();
 
                     if (app.getStatus().equalsIgnoreCase("Aplicado")) {
@@ -69,7 +73,7 @@ public class AplicacaoDAO {
     }
 
     public boolean salvar(Aplicacao app) {
-        String sql = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, valor_bruto, desconto, reacoes, observacoes_adicionais) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO aplicacoes_v2 (paciente_id, vacina_id, data_hora, status, forma_pagamento, valor, valor_bruto, desconto, reacoes, observacoes_adicionais, local_aplicacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         String sqlEstoque = "UPDATE vacinas SET qtd_disponivel = qtd_disponivel - 1 WHERE id = ?";
         try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql); PreparedStatement stmtEst = conn.prepareStatement(sqlEstoque)) {
             stmt.setInt(1, app.getPaciente().getId());
@@ -82,6 +86,7 @@ public class AplicacaoDAO {
             stmt.setDouble(8, app.getDesconto());
             stmt.setString(9, app.getReacoes());
             stmt.setString(10, app.getObservacoesAdicionais());
+            stmt.setString(11, app.getLocalAplicacao() != null ? app.getLocalAplicacao() : "");
             stmt.executeUpdate();
 
             if (app.getStatus().equalsIgnoreCase("Aplicado")) {
@@ -101,7 +106,7 @@ public class AplicacaoDAO {
             if (rs.next()) statusAntigo = rs.getString("status");
         } catch (Exception e) {}
 
-        String sql = "UPDATE aplicacoes_v2 SET paciente_id=?, vacina_id=?, data_hora=?, status=?, forma_pagamento=?, valor=?, valor_bruto=?, desconto=?, reacoes=?, observacoes_adicionais=? WHERE id=?";
+        String sql = "UPDATE aplicacoes_v2 SET paciente_id=?, vacina_id=?, data_hora=?, status=?, forma_pagamento=?, valor=?, valor_bruto=?, desconto=?, reacoes=?, observacoes_adicionais=?, local_aplicacao=? WHERE id=?";
         try (Connection conn = ConnectionFactory.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, app.getPaciente().getId());
             stmt.setInt(2, app.getVacina().getId());
@@ -113,7 +118,8 @@ public class AplicacaoDAO {
             stmt.setDouble(8, app.getDesconto());
             stmt.setString(9, app.getReacoes());
             stmt.setString(10, app.getObservacoesAdicionais());
-            stmt.setInt(11, app.getId());
+            stmt.setString(11, app.getLocalAplicacao() != null ? app.getLocalAplicacao() : "");
+            stmt.setInt(12, app.getId());
             stmt.executeUpdate();
 
             if (!statusAntigo.equalsIgnoreCase("Aplicado") && app.getStatus().equalsIgnoreCase("Aplicado")) {
@@ -163,13 +169,11 @@ public class AplicacaoDAO {
                 app.setStatus(rs.getString("status"));
                 app.setFormaPagamento(rs.getString("forma_pagamento"));
                 app.setValor(rs.getDouble("valor"));
-
-                // Trata caso a coluna seja nula em bancos velhos
                 app.setValorBruto(rs.getDouble("valor_bruto") == 0 ? rs.getDouble("valor") : rs.getDouble("valor_bruto"));
                 app.setDesconto(rs.getDouble("desconto"));
-
                 app.setReacoes(rs.getString("reacoes"));
                 app.setObservacoesAdicionais(rs.getString("observacoes_adicionais"));
+                app.setLocalAplicacao(rs.getString("local_aplicacao"));
                 lista.add(app);
             }
         } catch (SQLException e) { } return lista;

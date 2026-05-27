@@ -33,20 +33,19 @@ public class PainelAplicacoes extends JPanel {
 
     private JButton btnNavHoje, btnNavRecentes, btnNavProximas, btnNavObs;
     private JButton btnMarcarAplicada;
-    private JTextField txtBusca; // CAMPO DE BUSCA
+    private JTextField txtBusca;
 
     public PainelAplicacoes(TelaPrincipal frame) {
         this.frame = frame;
         this.dao = new AplicacaoDAO();
         setOpaque(false);
         setLayout(new BorderLayout(0, 20));
-        setBorder(new EmptyBorder(15, 20, 15, 20)); // Margem reduzida para caber em telas menores
+        setBorder(new EmptyBorder(15, 20, 15, 20));
 
         GlassPanel cardVidro = new GlassPanel();
         cardVidro.setLayout(new BorderLayout(0, 15));
-        cardVidro.setBorder(new EmptyBorder(15, 20, 15, 20)); // Margem reduzida do card
+        cardVidro.setBorder(new EmptyBorder(15, 20, 15, 20));
 
-        // HEADER
         JPanel header = new JPanel(new BorderLayout(20, 0));
         header.setOpaque(false);
         JLabel titulo = new JLabel("Controle de Aplicações");
@@ -59,16 +58,13 @@ public class PainelAplicacoes extends JPanel {
         btnNovo.setBackground(Cores.VERDE_AQUA);
         btnNovo.setForeground(Color.WHITE);
         btnNovo.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnNovo.setPreferredSize(new Dimension(150, 40)); // Reduzido para melhor responsividade
+        btnNovo.setPreferredSize(new Dimension(150, 40));
         btnNovo.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         btnNovo.addActionListener(e -> frame.trocarTelaCentral(new PainelFormulario(frame)));
         header.add(btnNovo, BorderLayout.EAST);
         cardVidro.add(header, BorderLayout.NORTH);
 
-        // =========================================================
-        // NAVBAR E BARRA DE BUSCA
-        // =========================================================
         JPanel pnlCentro = new JPanel(new BorderLayout(0, 20));
         pnlCentro.setOpaque(false);
 
@@ -94,24 +90,17 @@ public class PainelAplicacoes extends JPanel {
         pnlNavbar.add(btnNavProximas);
         pnlNavbar.add(btnNavObs);
 
-        // O novo Campo de Busca
         JPanel pnlBusca = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 5));
         pnlBusca.setOpaque(false);
         txtBusca = new JTextField();
-        txtBusca.setPreferredSize(new Dimension(200, 40)); // Reduzido para não empurrar a navbar
+        txtBusca.setPreferredSize(new Dimension(200, 40));
 
-        // Texto sem o emoji
         txtBusca.putClientProperty("JTextField.placeholderText", "Buscar paciente ou vacina...");
-
-        // MÁGICA DO FLATLAF: Coloca o ícone SVG dentro do Input, no lado esquerdo (leading)
         txtBusca.putClientProperty("JTextField.leadingIcon", carregarIcone("procurar.svg", 18, Cores.CINZA_LABEL));
-
         txtBusca.setFont(new Font("Segoe UI", Font.PLAIN, 15));
 
         txtBusca.addKeyListener(new KeyAdapter() {
-            public void keyReleased(KeyEvent e) {
-                carregarDadosTabela();
-            }
+            public void keyReleased(KeyEvent e) { carregarDadosTabela(); }
         });
 
         pnlBusca.add(txtBusca);
@@ -121,9 +110,6 @@ public class PainelAplicacoes extends JPanel {
 
         pnlCentro.add(pnlFiltros, BorderLayout.NORTH);
 
-        // =========================================================
-        // TABELA
-        // =========================================================
         modeloTabela = new DefaultTableModel(new Object[][]{}, new String[]{"ID", "Paciente", "Vacina", "Data/Hora", "Status"}) {
             public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -152,9 +138,6 @@ public class PainelAplicacoes extends JPanel {
 
         pnlCentro.add(scroll, BorderLayout.CENTER);
 
-        // =========================================================
-        // BOTÃO MARCAR COMO APLICADA
-        // =========================================================
         JPanel pnlAcoesTabela = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         pnlAcoesTabela.setOpaque(false);
 
@@ -162,7 +145,7 @@ public class PainelAplicacoes extends JPanel {
         btnMarcarAplicada.setBackground(Cores.VERDE_AQUA);
         btnMarcarAplicada.setForeground(Color.WHITE);
         btnMarcarAplicada.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btnMarcarAplicada.setPreferredSize(new Dimension(180, 40)); // Reduzido para melhorar layout
+        btnMarcarAplicada.setPreferredSize(new Dimension(180, 40));
         btnMarcarAplicada.setCursor(new Cursor(Cursor.HAND_CURSOR));
 
         btnMarcarAplicada.addActionListener(e -> marcarComoAplicada());
@@ -227,20 +210,16 @@ public class PainelAplicacoes extends JPanel {
             LocalDate dataApp = app.getDataHora().toLocalDate();
             String statusDB = app.getStatus() != null ? app.getStatus().trim() : "";
 
-            // A MÁGICA DA CORREÇÃO AQUI:
-            // Só considera como "Concluído" se a etiqueta existir E o status for realmente "Aplicado"
             boolean isConcluido = app.getObservacoesAdicionais() != null
                     && app.getObservacoesAdicionais().startsWith("[CONCLUÍDO]")
                     && statusDB.equalsIgnoreCase("Aplicado");
 
-            // Verifica a busca
             boolean atendeBusca = termoBusca.isEmpty() ||
                     app.getPaciente().getNome().toLowerCase().contains(termoBusca) ||
                     app.getVacina().getNomeVacina().toLowerCase().contains(termoBusca);
 
             if (!atendeBusca) continue;
 
-            // Filtros das abas
             if (abaAtual.equals("HOJE")) {
                 if (dataApp.equals(hoje)) listaFiltrada.add(app);
             }
@@ -261,7 +240,6 @@ public class PainelAplicacoes extends JPanel {
             }
         }
 
-        // Ordenação
         if (abaAtual.equals("HOJE")) {
             listaFiltrada.sort((a1, a2) -> {
                 boolean ag1 = a1.getStatus().equalsIgnoreCase("Agendado");
@@ -276,11 +254,9 @@ public class PainelAplicacoes extends JPanel {
             listaFiltrada.sort((a1, a2) -> a1.getDataHora().compareTo(a2.getDataHora()));
         }
 
-        // Desenhar a Tabela
         for (Aplicacao p : listaFiltrada) {
             String stDisplay = p.getStatus();
 
-            // REPETE A VERIFICAÇÃO AQUI PARA A TELA NÃO SE CONFUNDIR
             boolean isConcluido = p.getObservacoesAdicionais() != null
                     && p.getObservacoesAdicionais().startsWith("[CONCLUÍDO]")
                     && stDisplay.equalsIgnoreCase("Aplicado");
@@ -344,14 +320,10 @@ public class PainelAplicacoes extends JPanel {
         return popup;
     }
 
-    // =========================================================
-    // WHATSAPP FIX (Forçando a busca completa do paciente)
-    // =========================================================
     private void abrirWhatsAppPaciente() {
         Aplicacao app = getAplicacaoSelecionada();
         if (app != null && app.getPaciente() != null) {
 
-            // Vai no banco buscar a ficha completa do paciente para garantir que o telefone venha junto
             String telefoneSeguro = null;
             PacienteDAO pDao = new PacienteDAO();
             for (Paciente p : pDao.listarTodos()) {
@@ -361,7 +333,6 @@ public class PainelAplicacoes extends JPanel {
                 }
             }
 
-            // Fallback: se não achar na lista, usa o que já estava na memória
             if (telefoneSeguro == null) {
                 telefoneSeguro = app.getPaciente().getTelefone();
             }
@@ -376,13 +347,13 @@ public class PainelAplicacoes extends JPanel {
                             Desktop.getDesktop().browse(new java.net.URI(url));
                         }
                     } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(frame, "Erro ao abrir o navegador. Verifique se há um navegador padrão definido no Windows.", "Erro", JOptionPane.ERROR_MESSAGE);
+                        JOptionPane.showMessageDialog(frame, "Erro ao abrir o navegador.", "Erro", JOptionPane.ERROR_MESSAGE);
                     }
                 } else {
-                    JOptionPane.showMessageDialog(frame, "O telefone cadastrado (" + telefoneSeguro + ") é inválido. Atualize o cadastro do paciente.", "Aviso", JOptionPane.WARNING_MESSAGE);
+                    JOptionPane.showMessageDialog(frame, "O telefone cadastrado (" + telefoneSeguro + ") é inválido.", "Aviso", JOptionPane.WARNING_MESSAGE);
                 }
             } else {
-                JOptionPane.showMessageDialog(frame, "Nenhum telefone cadastrado para este paciente.", "Aviso", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(frame, "Nenhum telefone cadastrado.", "Aviso", JOptionPane.WARNING_MESSAGE);
             }
         }
     }
@@ -461,12 +432,12 @@ public class PainelAplicacoes extends JPanel {
 
         btn.addActionListener(e -> {
             if (!chkSemReacoes.isSelected() && t1.getText().trim().isEmpty()) {
-                JOptionPane.showMessageDialog(diag, "Por favor, descreva as reações do paciente ou marque a caixa 'Sem reações relatadas'.", "Campo Obrigatório", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(diag, "Descreva as reações ou marque 'Sem reações relatadas'.", "Aviso", JOptionPane.WARNING_MESSAGE);
                 t1.requestFocus();
                 return;
             }
             if (!chkSemObs.isSelected() && t2.getText().trim().isEmpty()) {
-                JOptionPane.showMessageDialog(diag, "Por favor, preencha as observações gerais ou marque a caixa 'Sem observações'.", "Campo Obrigatório", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(diag, "Preencha as observações ou marque 'Sem observações'.", "Aviso", JOptionPane.WARNING_MESSAGE);
                 t2.requestFocus();
                 return;
             }
@@ -480,7 +451,7 @@ public class PainelAplicacoes extends JPanel {
             dao.atualizar(app);
             diag.dispose();
             carregarDadosTabela();
-            JOptionPane.showMessageDialog(frame, "Observações registradas com sucesso!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(frame, "Observações registradas!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
         });
 
         p.add(btn, BorderLayout.SOUTH);
@@ -598,6 +569,10 @@ public class PainelAplicacoes extends JPanel {
         html.append("<p><b>Vacina:</b> ").append(app.getVacina().getNomeVacina()).append("</p>");
         html.append("<p><b>Lote:</b> ").append(app.getVacina().getLote()).append("</p>");
         html.append("<p><b>Data:</b> ").append(app.getDataHora().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))).append("</p>");
+
+        if (app.getLocalAplicacao() != null && !app.getLocalAplicacao().isEmpty()) {
+            html.append("<p><b>Local Aplicado:</b> ").append(app.getLocalAplicacao()).append("</p>");
+        }
 
         String reacoes = app.getReacoes();
         if (reacoes != null && !reacoes.trim().isEmpty() && !reacoes.equals("Nenhuma reação relatada.")) {

@@ -16,6 +16,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
+import java.time.LocalDate;
+import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.prefs.Preferences;
@@ -39,7 +41,6 @@ public class PainelPacientes extends JPanel {
         cardVidro.setLayout(new BorderLayout(0, 15));
         cardVidro.setBorder(new EmptyBorder(25, 35, 30, 35));
 
-        // HEADER
         JPanel header = new JPanel(new BorderLayout(20, 0));
         header.setOpaque(false);
         JLabel titulo = new JLabel("Pacientes Registrados");
@@ -54,11 +55,7 @@ public class PainelPacientes extends JPanel {
         btnNovo.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btnNovo.setPreferredSize(new Dimension(180, 45));
         btnNovo.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        // CHAMA O PAINEL DE FORMULÁRIO (MODO: NOVO PACIENTE)
-        btnNovo.addActionListener(e -> {
-            frame.trocarTelaCentral(new PainelFormularioPaciente(frame));
-        });
+        btnNovo.addActionListener(e -> frame.trocarTelaCentral(new PainelFormularioPaciente(frame)));
 
         header.add(btnNovo, BorderLayout.EAST);
         cardVidro.add(header, BorderLayout.NORTH);
@@ -66,8 +63,8 @@ public class PainelPacientes extends JPanel {
         JPanel pnlCentro = new JPanel(new BorderLayout(0, 20));
         pnlCentro.setOpaque(false);
 
-        // TABELA
-        String[] colunas = {"ID", "Nome", "CPF", "Nascimento", "Telefone", "Alergias"};
+        // NOVA COLUNA COM IDADE
+        String[] colunas = {"ID", "Nome", "CPF", "Nascimento / Idade", "Telefone", "Alergias"};
         modeloTabela = new DefaultTableModel(new Object[][]{}, colunas) {
             public boolean isCellEditable(int row, int column) { return false; }
         };
@@ -114,22 +111,31 @@ public class PainelPacientes extends JPanel {
         carregarDadosTabela();
     }
 
+    private String calcularIdadeExata(LocalDate dataNascimento) {
+        if (dataNascimento == null) return "";
+        Period periodo = Period.between(dataNascimento, LocalDate.now());
+        int a = periodo.getYears(); int m = periodo.getMonths(); int d = periodo.getDays();
+
+        StringBuilder idade = new StringBuilder();
+        if (a > 0) idade.append(a).append(a == 1 ? " ano" : " anos");
+        if (m > 0) { if (idade.length() > 0) idade.append(", "); idade.append(m).append(m == 1 ? " mês" : " meses"); }
+        if (d > 0) { if (idade.length() > 0) idade.append(", "); idade.append(d).append(d == 1 ? " dia" : " dias"); }
+        if (idade.length() == 0) return "Recém-nascido";
+        return idade.toString();
+    }
+
     private void carregarDadosTabela() {
         modeloTabela.setRowCount(0);
         listaPacientes = dao.listarTodos();
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
         for (Paciente p : listaPacientes) {
-            String nas = p.getDataNascimento() != null ? p.getDataNascimento().format(fmt) : "N/A";
+            String idadeDetalhada = p.getDataNascimento() != null ? calcularIdadeExata(p.getDataNascimento()) : "";
+            String nas = p.getDataNascimento() != null ? p.getDataNascimento().format(fmt) + " (" + idadeDetalhada + ")" : "N/A";
             String alergias = (p.getAlergias() == null || p.getAlergias().trim().isEmpty()) ? "Nenhuma" : p.getAlergias();
 
             modeloTabela.addRow(new Object[]{
-                    String.format("%03d", p.getId()),
-                    p.getNome(),
-                    p.getCpf(),
-                    nas,
-                    p.getTelefone(),
-                    alergias
+                    String.format("%03d", p.getId()), p.getNome(), p.getCpf(), nas, p.getTelefone(), alergias
             });
         }
         hoveredRow = -1;
@@ -140,12 +146,8 @@ public class PainelPacientes extends JPanel {
         return null;
     }
 
-    // =========================================================
-    // MENU DE CONTEXTO PREMIUM
-    // =========================================================
     private JPopupMenu criarMenuOpcoesPacientes() {
         JPopupMenu popup = new JPopupMenu();
-
         popup.setBorder(BorderFactory.createCompoundBorder(new LineBorder(new Color(230, 235, 240), 1, true), new EmptyBorder(10, 5, 10, 5)));
         popup.setBackground(Color.WHITE);
 
@@ -153,13 +155,10 @@ public class PainelPacientes extends JPanel {
         JMenuItem itemFicha = criarItemMenu("Imprimir Ficha Completa", "imprimir.svg", Cores.CINZA_GRAFITE);
         JMenuItem itemExcluir = criarItemMenu("Excluir Cadastro do Paciente", "trash.svg", new Color(220, 53, 69));
 
-        // CHAMA O PAINEL DE FORMULÁRIO (MODO: EDITAR PACIENTE)
         itemEditar.addActionListener(e -> {
             int l = tabelaPacientes.getSelectedRow();
             if (l >= 0) {
-                // Busca os dados do paciente clicado
                 Paciente pEmEdicao = buscarPacientePorIdNaLista(Integer.parseInt(tabelaPacientes.getValueAt(l, 0).toString()));
-                // Troca a tela central para o formulário, enviando o paciente junto
                 frame.trocarTelaCentral(new PainelFormularioPaciente(frame, pEmEdicao));
             }
         });
@@ -174,7 +173,6 @@ public class PainelPacientes extends JPanel {
             if (l >= 0) {
                 int id = Integer.parseInt(tabelaPacientes.getValueAt(l, 0).toString());
                 String nome = tabelaPacientes.getValueAt(l, 1).toString();
-
                 int opt1 = JOptionPane.showConfirmDialog(frame, "ATENÇÃO: Você está prestes a excluir o cadastro de:\n\n" + nome + " (ID: "+id+")\n\nIsso removerá o histórico deste paciente.\nDeseja continuar?", "1ª Confirmação", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
                 if(opt1 == JOptionPane.YES_OPTION) {
                     int opt2 = JOptionPane.showConfirmDialog(frame, "CONFIRMAÇÃO FINAL:\nTem certeza absoluta que deseja apagar permanentemente este registro?\nEsta ação NÃO PODE SER DESFEITA.", "2ª Confirmação - PERIGO", JOptionPane.YES_NO_OPTION, JOptionPane.ERROR_MESSAGE);
@@ -214,9 +212,6 @@ public class PainelPacientes extends JPanel {
         }
     }
 
-    // =========================================================
-    // IMPRESSÃO DE FICHA A4 (PREMIUM COM ROSA E AZUL + DADOS REAIS)
-    // =========================================================
     private void gerarEImprimirFichaPaciente(Paciente paciente) {
         if (paciente == null) return;
         Preferences prefs = Preferences.userNodeForPackage(PainelConfiguracoes.class);
@@ -248,10 +243,12 @@ public class PainelPacientes extends JPanel {
         html.append("<td width='110' align='center'>").append(tagLogoClinica).append("</td><td valign='middle'><p class='nome-clinica'>").append(clinicaNome).append("</p><p class='info-clinica'>CNPJ: ").append(clinicaCnpj).append("<br>").append(clinicaEnd).append("<br>Telefone: ").append(clinicaTel).append("</p></td>");
         html.append("<td width='150' align='right' valign='middle'><h2 style='color: #1E6669; margin: 0;'>PRONTUÁRIO</h2><p style='color: #D88C9A; margin: 0; font-weight: bold;'>Via do Paciente</p></td></tr></table>");
 
+        String idadeStr = paciente.getDataNascimento() != null ? calcularIdadeExata(paciente.getDataNascimento()) : "N/A";
+
         html.append("<div class='titulo-secao'>Dados do Paciente</div><table class='tabela-dados'><tr><td valign='top'><table>");
         html.append("<tr><td width='120'><b>Nome Completo:</b></td><td>").append(paciente.getNome()).append("</td></tr>");
         html.append("<tr><td><b>CPF:</b></td><td>").append(paciente.getCpf() == null || paciente.getCpf().isEmpty() ? "N/A" : paciente.getCpf()).append("</td></tr>");
-        html.append("<tr><td><b>Nascimento:</b></td><td>").append(paciente.getDataNascimento().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))).append("</td></tr>");
+        html.append("<tr><td><b>Nascimento:</b></td><td>").append(paciente.getDataNascimento().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))).append(" (").append(idadeStr).append(")</td></tr>");
         html.append("<tr><td><b>Telefone:</b></td><td>").append(paciente.getTelefone()).append("</td></tr>");
         html.append("<tr><td><b>Aplicador(a):</b></td><td><b>Enf Karoline Gulchinski</b></td></tr>");
         html.append("<tr><td><b>Alergias:</b></td><td><span class='danger'>").append(paciente.getAlergias() == null || paciente.getAlergias().trim().isEmpty() ? "Nenhuma alergia relatada" : paciente.getAlergias()).append("</span></td></tr>");

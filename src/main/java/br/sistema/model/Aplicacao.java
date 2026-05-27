@@ -7,13 +7,14 @@ public class Aplicacao {
     private Paciente paciente;
     private Vacina vacina;
     private LocalDateTime dataHora;
-    private String status; // "Agendado" ou "Aplicado"
+    private String status;
     private String formaPagamento;
-    private double valor; // Valor Final (Líquido Pago)
+    private double valor;
     private double valorBruto;
     private double desconto;
     private String reacoes;
     private String observacoesAdicionais;
+    private String localAplicacao; // NOVO CAMPO
 
     public Aplicacao() {}
 
@@ -26,37 +27,28 @@ public class Aplicacao {
         this.valor = valor;
     }
 
-    // Getters e Setters
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
-
     public Paciente getPaciente() { return paciente; }
     public void setPaciente(Paciente paciente) { this.paciente = paciente; }
-
     public Vacina getVacina() { return vacina; }
     public void setVacina(Vacina vacina) { this.vacina = vacina; }
-
     public LocalDateTime getDataHora() { return dataHora; }
     public void setDataHora(LocalDateTime dataHora) { this.dataHora = dataHora; }
-
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
-
     public String getFormaPagamento() { return formaPagamento; }
     public void setFormaPagamento(String formaPagamento) { this.formaPagamento = formaPagamento; }
-
     public double getValor() { return valor; }
     public void setValor(double valor) { this.valor = valor; }
-
     public double getValorBruto() { return valorBruto; }
     public void setValorBruto(double valorBruto) { this.valorBruto = valorBruto; }
-
     public double getDesconto() { return desconto; }
     public void setDesconto(double desconto) { this.desconto = desconto; }
-
     public String getReacoes() { return reacoes; }
     public void setReacoes(String reacoes) { this.reacoes = reacoes; }
-
     public String getObservacoesAdicionais() { return observacoesAdicionais; }
     public void setObservacoesAdicionais(String observacoesAdicionais) { this.observacoesAdicionais = observacoesAdicionais; }
+    public String getLocalAplicacao() { return localAplicacao; }
+    public void setLocalAplicacao(String localAplicacao) { this.localAplicacao = localAplicacao; }
 }

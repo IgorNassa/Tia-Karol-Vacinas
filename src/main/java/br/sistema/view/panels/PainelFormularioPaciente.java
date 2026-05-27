@@ -43,7 +43,6 @@ public class PainelFormularioPaciente extends JPanel {
     private JTextField txtAlergias;
     private JTextField txtMedicoEncaminhador;
 
-    // RESPONSÁVEIS ATUALIZADOS
     private JTextField txtNomeResponsavel;
     private JFormattedTextField txtCpfResponsavel;
     private JTextField txtNomeResponsavel2;
@@ -72,7 +71,6 @@ public class PainelFormularioPaciente extends JPanel {
         GridBagConstraints gbcMain = new GridBagConstraints(); gbcMain.anchor = GridBagConstraints.CENTER;
         add(cardVidro, gbcMain);
 
-        // TOPO
         JPanel pnlTopo = new JPanel(new BorderLayout()); pnlTopo.setOpaque(false);
         JLabel btnVoltar = new JLabel(" Voltar"); btnVoltar.setIcon(carregarIcone("seta-para-a-esquerda.svg", 16, Cores.VERDE_AQUA));
         btnVoltar.setForeground(Cores.VERDE_AQUA); btnVoltar.setFont(new Font("Segoe UI", Font.BOLD, 15)); btnVoltar.setCursor(new Cursor(Cursor.HAND_CURSOR));
@@ -82,7 +80,6 @@ public class PainelFormularioPaciente extends JPanel {
         lblTitulo = new JLabel("Novo Paciente"); lblTitulo.setFont(new Font("Segoe UI Semilight", Font.PLAIN, 32)); lblTitulo.setForeground(Cores.ROSA_KAROL);
         pnlTopo.add(lblTitulo, BorderLayout.EAST); cardVidro.add(pnlTopo, BorderLayout.NORTH);
 
-        // NAVBAR
         JPanel pnlCentro = new JPanel(new BorderLayout(0, 20)); pnlCentro.setOpaque(false);
         JPanel pnlNavbar = new JPanel(new FlowLayout(FlowLayout.CENTER, 40, 0)); pnlNavbar.setOpaque(false); pnlNavbar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(210, 210, 210)));
         btnNavPessoais = criarBotaoNav("Dados Pessoais", true); btnNavResponsavel = criarBotaoNav("Responsável Legal", false); btnNavEndereco = criarBotaoNav("Endereço", false);
@@ -93,7 +90,6 @@ public class PainelFormularioPaciente extends JPanel {
         pnlCards.add(criarAbaDadosPessoais(), "PESSOAIS"); pnlCards.add(criarAbaResponsavel(), "RESPONSAVEL"); pnlCards.add(criarAbaEndereco(), "ENDERECO");
         pnlCentro.add(pnlCards, BorderLayout.CENTER); cardVidro.add(pnlCentro, BorderLayout.CENTER);
 
-        // RODAPÉ
         btnSalvar = new JButton(" Finalizar Cadastro"); btnSalvar.setIcon(carregarIcone("disco.svg", 20, Color.WHITE));
         btnSalvar.setPreferredSize(new Dimension(320, 55)); btnSalvar.setBackground(Cores.VERDE_AQUA); btnSalvar.setForeground(Color.WHITE); btnSalvar.setFont(new Font("Segoe UI", Font.BOLD, 16)); btnSalvar.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btnSalvar.addActionListener(e -> salvarRegistro());
@@ -106,12 +102,23 @@ public class PainelFormularioPaciente extends JPanel {
     public PainelFormularioPaciente(TelaPrincipal frame, Paciente paciente) {
         this(frame);
         this.pacienteEmEdicao = paciente;
-
         lblTitulo.setText("Editar Paciente");
         btnSalvar.setText(" Salvar Alterações");
         btnSalvar.setBackground(Cores.ROSA_KAROL);
-
         preencherDadosParaEdicao();
+    }
+
+    private String calcularIdadeExata(LocalDate dataNascimento) {
+        if (dataNascimento == null) return "";
+        Period periodo = Period.between(dataNascimento, LocalDate.now());
+        int a = periodo.getYears(); int m = periodo.getMonths(); int d = periodo.getDays();
+
+        StringBuilder idade = new StringBuilder();
+        if (a > 0) idade.append(a).append(a == 1 ? " ano" : " anos");
+        if (m > 0) { if (idade.length() > 0) idade.append(", "); idade.append(m).append(m == 1 ? " mês" : " meses"); }
+        if (d > 0) { if (idade.length() > 0) idade.append(", "); idade.append(d).append(d == 1 ? " dia" : " dias"); }
+        if (idade.length() == 0) return "Recém-nascido";
+        return idade.toString();
     }
 
     private void preencherDadosParaEdicao() {
@@ -134,7 +141,6 @@ public class PainelFormularioPaciente extends JPanel {
         txtMedicoEncaminhador.setText(pacienteEmEdicao.getMedicoEncaminhador());
         txtAlergias.setText(pacienteEmEdicao.getAlergias());
 
-        // CARREGA RESPONSÁVEIS
         txtNomeResponsavel.setText(pacienteEmEdicao.getNomeResponsavel());
         txtCpfResponsavel.setText(pacienteEmEdicao.getCpfResponsavel());
         txtNomeResponsavel2.setText(pacienteEmEdicao.getNomeResponsavel2());
@@ -142,13 +148,9 @@ public class PainelFormularioPaciente extends JPanel {
 
         Endereco end = pacienteEmEdicao.getEndereco();
         if (end != null) {
-            txtCep.setText(end.getCep());
-            txtRua.setText(end.getRua());
-            txtNumero.setText(end.getNumero());
-            txtComplemento.setText(end.getComplemento());
-            txtBairro.setText(end.getBairro());
-            txtCidade.setText(end.getCidade());
-            txtUf.setText(end.getUf());
+            txtCep.setText(end.getCep()); txtRua.setText(end.getRua()); txtNumero.setText(end.getNumero());
+            txtComplemento.setText(end.getComplemento()); txtBairro.setText(end.getBairro());
+            txtCidade.setText(end.getCidade()); txtUf.setText(end.getUf());
             codigoIbge = end.getCodigoIbge() != null ? end.getCodigoIbge() : "";
         }
 
@@ -157,13 +159,10 @@ public class PainelFormularioPaciente extends JPanel {
                 fotoBytes = pacienteEmEdicao.getFoto();
                 Image img = new ImageIcon(fotoBytes).getImage();
                 BufferedImage bimage = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
-                Graphics2D bGr = bimage.createGraphics();
-                bGr.drawImage(img, 0, 0, null);
-                bGr.dispose();
+                Graphics2D bGr = bimage.createGraphics(); bGr.drawImage(img, 0, 0, null); bGr.dispose();
                 pnlAvatar.setImage(bimage);
             } catch (Exception e) {}
         }
-
         verificarIdadeEAdaptarUI();
     }
 
@@ -181,21 +180,12 @@ public class PainelFormularioPaciente extends JPanel {
         c.gridheight = 1; c.weightx = 1.0;
 
         JPanel pnlNome = new JPanel(new BorderLayout(0, 5)); pnlNome.setOpaque(false);
-
-        chkEstrangeiro = new JCheckBox("Paciente Estrangeiro (Ignorar máscaras de CPF, CEP e Telefone)");
-        chkEstrangeiro.setOpaque(false);
-        chkEstrangeiro.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        chkEstrangeiro.setForeground(Cores.CINZA_GRAFITE);
-        chkEstrangeiro.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        chkEstrangeiro = new JCheckBox("Paciente Estrangeiro (Ignorar máscaras)");
+        chkEstrangeiro.setOpaque(false); chkEstrangeiro.setFont(new Font("Segoe UI", Font.BOLD, 12)); chkEstrangeiro.setForeground(Cores.CINZA_GRAFITE); chkEstrangeiro.setCursor(new Cursor(Cursor.HAND_CURSOR));
         chkEstrangeiro.addActionListener(e -> atualizarObrigatoriedadesEstrangeiro());
 
-        txtNome = criarCampoTexto("Nome completo do paciente");
-        aplicarCapitalizacao(txtNome);
-        adicionarValidacaoTempoReal(txtNome, true, "TEXTO");
-
-        pnlNome.add(chkEstrangeiro, BorderLayout.NORTH);
-        pnlNome.add(txtNome, BorderLayout.CENTER);
-
+        txtNome = criarCampoTexto("Nome completo do paciente"); aplicarCapitalizacao(txtNome); adicionarValidacaoTempoReal(txtNome, true, "TEXTO");
+        pnlNome.add(chkEstrangeiro, BorderLayout.NORTH); pnlNome.add(txtNome, BorderLayout.CENTER);
         c.gridx = 1; c.gridy = 0; c.gridwidth = 2; pnl.add(montarBloco("NOME COMPLETO *", pnlNome, txtNome), c);
 
         txtCpf = new JFormattedTextField(); aplicarMascara(txtCpf, "###.###.###-##"); configurarCampoFormatado(txtCpf); adicionarValidacaoTempoReal(txtCpf, false, "CPF");
@@ -229,21 +219,15 @@ public class PainelFormularioPaciente extends JPanel {
 
     private JPanel criarAbaResponsavel() {
         JPanel pnl = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 20)); pnl.setOpaque(false); pnl.setBorder(new EmptyBorder(10, 0, 0, 0));
-
-        // Aumentei o Grid para suportar 4 campos em vez de 2
         JPanel grid = new JPanel(new GridLayout(4, 1, 0, 15)); grid.setOpaque(false); grid.setPreferredSize(new Dimension(550, 300));
 
-        txtNomeResponsavel = criarCampoTexto("Mãe, Pai ou Responsável Principal");
-        aplicarCapitalizacao(txtNomeResponsavel);
-        adicionarValidacaoTempoReal(txtNomeResponsavel, false, "TEXTO");
+        txtNomeResponsavel = criarCampoTexto("Mãe, Pai ou Responsável Principal"); aplicarCapitalizacao(txtNomeResponsavel); adicionarValidacaoTempoReal(txtNomeResponsavel, false, "TEXTO");
         grid.add(montarBloco("NOME DO RESPONSÁVEL 1", txtNomeResponsavel));
 
         txtCpfResponsavel = new JFormattedTextField(); aplicarMascara(txtCpfResponsavel, "###.###.###-##"); configurarCampoFormatado(txtCpfResponsavel); adicionarValidacaoTempoReal(txtCpfResponsavel, false, "CPF");
         grid.add(montarBloco("CPF DO RESPONSÁVEL 1", txtCpfResponsavel));
 
-        // NOVOS CAMPOS DO RESPONSÁVEL 2
-        txtNomeResponsavel2 = criarCampoTexto("2º Responsável (Opcional)");
-        aplicarCapitalizacao(txtNomeResponsavel2);
+        txtNomeResponsavel2 = criarCampoTexto("2º Responsável (Opcional)"); aplicarCapitalizacao(txtNomeResponsavel2);
         grid.add(montarBloco("NOME DO RESPONSÁVEL 2 (OPCIONAL)", txtNomeResponsavel2));
 
         txtCpfResponsavel2 = new JFormattedTextField(); aplicarMascara(txtCpfResponsavel2, "###.###.###-##"); configurarCampoFormatado(txtCpfResponsavel2); adicionarValidacaoTempoReal(txtCpfResponsavel2, false, "CPF");
@@ -282,9 +266,7 @@ public class PainelFormularioPaciente extends JPanel {
                     for (String p : palavras) {
                         if (p.length() > 2 || p.matches("^(dr|dra|sr|sra)$")) {
                             sb.append(p.substring(0, 1).toUpperCase()).append(p.substring(1));
-                        } else {
-                            sb.append(p);
-                        }
+                        } else { sb.append(p); }
                         sb.append(" ");
                     }
                     campo.setText(sb.toString().trim());
@@ -295,21 +277,17 @@ public class PainelFormularioPaciente extends JPanel {
 
     private void atualizarObrigatoriedadesEstrangeiro() {
         boolean est = chkEstrangeiro.isSelected();
-        JLabel lblCep = mapLabels.get(txtCep);
-        JLabel lblNum = mapLabels.get(txtNumero);
-        JLabel lblCpf = mapLabels.get(txtCpf);
+        JLabel lblCep = mapLabels.get(txtCep); JLabel lblNum = mapLabels.get(txtNumero); JLabel lblCpf = mapLabels.get(txtCpf);
 
         if (est) {
             if (lblCep != null) { lblCep.setText("ZIP CODE (OPCIONAL)"); txtCep.putClientProperty("tituloOriginal", "ZIP CODE (OPCIONAL)"); setErroComponente(txtCep, false, null); }
             if (lblNum != null) { lblNum.setText("NÚMERO (OPCIONAL)"); txtNumero.putClientProperty("tituloOriginal", "NÚMERO (OPCIONAL)"); setErroComponente(txtNumero, false, null); }
             if (lblCpf != null && !isMenorDeIdade) { lblCpf.setText("PASSAPORTE / ID"); txtCpf.putClientProperty("tituloOriginal", "PASSAPORTE / ID"); setErroComponente(txtCpf, false, null); }
 
-            txtTelefone.setFormatterFactory(null);
-            txtTelefone.putClientProperty("JTextField.placeholderText", "Ex: +54 9 11 1234...");
+            txtTelefone.setFormatterFactory(null); txtTelefone.putClientProperty("JTextField.placeholderText", "Ex: +54 9 11 1234...");
             if(limparMascara(txtTelefone.getText()).isEmpty()) txtTelefone.setText("");
 
-            txtTelefone2.setFormatterFactory(null);
-            txtTelefone2.putClientProperty("JTextField.placeholderText", "Ex: +1 555-0198");
+            txtTelefone2.setFormatterFactory(null); txtTelefone2.putClientProperty("JTextField.placeholderText", "Ex: +1 555-0198");
             if(limparMascara(txtTelefone2.getText()).isEmpty()) txtTelefone2.setText("");
 
         } else {
@@ -317,12 +295,10 @@ public class PainelFormularioPaciente extends JPanel {
             if (lblCep != null) { lblCep.setText("CEP *"); txtCep.putClientProperty("tituloOriginal", "CEP *"); validarCampo(txtCep, true, "CEP"); }
             if (lblNum != null) { lblNum.setText("NÚMERO *"); txtNumero.putClientProperty("tituloOriginal", "NÚMERO *"); validarCampo(txtNumero, true, "TEXTO"); }
 
-            aplicarMascara(txtTelefone, "(##) #####-####");
-            txtTelefone.putClientProperty("JTextField.placeholderText", "");
+            aplicarMascara(txtTelefone, "(##) #####-####"); txtTelefone.putClientProperty("JTextField.placeholderText", "");
             if(limparMascara(txtTelefone.getText()).isEmpty()) txtTelefone.setText("");
 
-            aplicarMascara(txtTelefone2, "(##) #####-####");
-            txtTelefone2.putClientProperty("JTextField.placeholderText", "");
+            aplicarMascara(txtTelefone2, "(##) #####-####"); txtTelefone2.putClientProperty("JTextField.placeholderText", "");
             if(limparMascara(txtTelefone2.getText()).isEmpty()) txtTelefone2.setText("");
         }
     }
@@ -330,8 +306,15 @@ public class PainelFormularioPaciente extends JPanel {
     private void verificarIdadeEAdaptarUI() {
         if (isDataValida(txtDataNascimento.getText())) {
             LocalDate dataNasc = LocalDate.parse(txtDataNascimento.getText(), DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT));
-            int idade = Period.between(dataNasc, LocalDate.now()).getYears();
-            isMenorDeIdade = idade < 18;
+            int idadeAnos = Period.between(dataNasc, LocalDate.now()).getYears();
+            isMenorDeIdade = idadeAnos < 18;
+
+            JLabel lblNasc = mapLabels.get(txtDataNascimento);
+            if (lblNasc != null) {
+                String strNasc = "DATA NASCIMENTO (" + calcularIdadeExata(dataNasc) + ") *";
+                lblNasc.setText(strNasc);
+                txtDataNascimento.putClientProperty("tituloOriginal", strNasc);
+            }
 
             JLabel lblTel = mapLabels.get(txtTelefone); JLabel lblCpf = mapLabels.get(txtCpf);
 
@@ -373,46 +356,30 @@ public class PainelFormularioPaciente extends JPanel {
 
     private boolean isDataValida(String dataStr) {
         if (dataStr.length() != 10) return false;
-        try {
-            LocalDate data = LocalDate.parse(dataStr, DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT));
-            return data.getYear() >= 1900 && !data.isAfter(LocalDate.now());
-        } catch (Exception e) { return false; }
+        try { LocalDate data = LocalDate.parse(dataStr, DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT)); return data.getYear() >= 1900 && !data.isAfter(LocalDate.now()); } catch (Exception e) { return false; }
     }
 
-    private boolean isTelefoneValido(String tel) {
-        String num = tel.replaceAll("[^0-9]", "");
-        return num.length() >= 10;
-    }
+    private boolean isTelefoneValido(String tel) { String num = tel.replaceAll("[^0-9]", ""); return num.length() >= 10; }
 
     private void adicionarValidacaoTempoReal(JTextField campo, boolean obrigatorio, String tipo) {
-        campo.addFocusListener(new FocusAdapter() {
-            public void focusLost(FocusEvent e) { validarCampo(campo, obrigatorio, tipo); }
-            public void focusGained(FocusEvent e) { setErroComponente(campo, false, null); }
-        });
-
+        campo.addFocusListener(new FocusAdapter() { public void focusLost(FocusEvent e) { validarCampo(campo, obrigatorio, tipo); } public void focusGained(FocusEvent e) { setErroComponente(campo, false, null); } });
         campo.addKeyListener(new KeyAdapter() {
             public void keyReleased(KeyEvent e) {
-                String numeros = campo.getText().replaceAll("[^0-9]", "");
-                String limpo = limparMascara(campo.getText());
-
+                String numeros = campo.getText().replaceAll("[^0-9]", ""); String limpo = limparMascara(campo.getText());
                 if (obrigatorio && limpo.isEmpty()) return;
-
                 boolean correto = false;
                 if (tipo.equals("CPF") && Validadores.isCpfValido(numeros)) correto = true;
                 else if (tipo.equals("DATA") && isDataValida(campo.getText())) correto = true;
                 else if (tipo.equals("TELEFONE") && isTelefoneValido(campo.getText())) correto = true;
                 else if (tipo.equals("CEP") && numeros.length() == 8) correto = true;
                 else if (tipo.equals("TEXTO") && !limpo.isEmpty()) correto = true;
-
                 if (correto) setErroComponente(campo, false, null);
             }
         });
     }
 
     private boolean validarCampo(JTextField campo, boolean obrigatorio, String tipo) {
-        String limpo = limparMascara(campo.getText());
-        String numeros = campo.getText().replaceAll("[^0-9]", "");
-
+        String limpo = limparMascara(campo.getText()); String numeros = campo.getText().replaceAll("[^0-9]", "");
         if (obrigatorio && limpo.isEmpty()) { setErroComponente(campo, true, "Obrigatório"); return false; }
         if (!limpo.isEmpty() && !chkEstrangeiro.isSelected()) {
             if (tipo.equals("CPF") && !Validadores.isCpfValido(numeros)) { setErroComponente(campo, true, "Inválido"); return false; }
@@ -425,103 +392,46 @@ public class PainelFormularioPaciente extends JPanel {
 
     private void setErroComponente(JComponent comp, boolean comErro, String msg) {
         JLabel lbl = mapLabels.get(comp); String original = (String) comp.getClientProperty("tituloOriginal");
-        if (comErro) {
-            comp.putClientProperty("JComponent.outline", "error");
-            if (lbl != null && msg != null) { lbl.setText(original + " - " + msg); lbl.setForeground(new Color(220, 53, 69)); }
-        } else {
-            comp.putClientProperty("JComponent.outline", null);
-            if (lbl != null) { lbl.setText(original); lbl.setForeground(Cores.CINZA_LABEL); }
-        } comp.repaint();
+        if (comErro) { comp.putClientProperty("JComponent.outline", "error"); if (lbl != null && msg != null) { lbl.setText(original + " - " + msg); lbl.setForeground(new Color(220, 53, 69)); } } else { comp.putClientProperty("JComponent.outline", null); if (lbl != null) { lbl.setText(original); lbl.setForeground(Cores.CINZA_LABEL); } } comp.repaint();
     }
 
     private void buscarCepEPreencher() {
         if(chkEstrangeiro.isSelected()) return;
-
         String cep = txtCep.getText().replaceAll("[^0-9]", "");
         if (cep.length() == 8) {
             new Thread(() -> { String[] dados = ServicoCEP.buscarCep(cep);
                 SwingUtilities.invokeLater(() -> {
                     if (dados != null) { txtRua.setText(dados[0]); txtBairro.setText(dados[1]); txtCidade.setText(dados[2]); txtUf.setText(dados[3]); codigoIbge = dados[4]; txtNumero.requestFocus(); setErroComponente(txtCep, false, null); }
-                    else { setErroComponente(txtCep, true, "Não encontrado no ViaCEP"); }
+                    else { setErroComponente(txtCep, true, "Não encontrado"); }
                 });
             }).start();
         }
     }
 
     private void salvarRegistro() {
-        boolean est = chkEstrangeiro.isSelected();
-        boolean valid = true;
+        boolean est = chkEstrangeiro.isSelected(); boolean valid = true;
+        valid &= validarCampo(txtNome, true, "TEXTO"); valid &= validarCampo(txtDataNascimento, true, "DATA"); valid &= validarCampo(txtTelefone, true, "TELEFONE");
+        valid &= validarCampo(txtCep, !est, "CEP"); valid &= validarCampo(txtNumero, !est, "TEXTO");
+        valid &= validarCampo(txtCpfResponsavel, false, "CPF"); valid &= validarCampo(txtCpfResponsavel2, false, "CPF");
 
-        valid &= validarCampo(txtNome, true, "TEXTO");
-        valid &= validarCampo(txtDataNascimento, true, "DATA");
-        valid &= validarCampo(txtTelefone, true, "TELEFONE");
-
-        valid &= validarCampo(txtCep, !est, "CEP");
-        valid &= validarCampo(txtNumero, !est, "TEXTO");
-
-        valid &= validarCampo(txtCpfResponsavel, false, "CPF");
-        valid &= validarCampo(txtCpfResponsavel2, false, "CPF"); // Adicionado Validação
-
-        if (!isMenorDeIdade && !est) {
-            valid &= validarCampo(txtCpf, true, "CPF");
-        } else if (!isMenorDeIdade && est) {
-            valid &= validarCampo(txtCpf, false, "TEXTO");
-        } else {
-            valid &= validarCampo(txtCpf, false, "CPF");
-            valid &= validarCampo(txtNomeResponsavel, true, "TEXTO");
-        }
-
+        if (!isMenorDeIdade && !est) { valid &= validarCampo(txtCpf, true, "CPF"); } else if (!isMenorDeIdade && est) { valid &= validarCampo(txtCpf, false, "TEXTO"); } else { valid &= validarCampo(txtCpf, false, "CPF"); valid &= validarCampo(txtNomeResponsavel, true, "TEXTO"); }
         if (!valid) { JOptionPane.showMessageDialog(frame, "Verifique os campos obrigatórios marcados em vermelho.", "Atenção", JOptionPane.WARNING_MESSAGE); return; }
 
         LocalDate dataNasc = LocalDate.parse(txtDataNascimento.getText(), DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT));
         Endereco endereco = new Endereco(txtCep.getText(), txtRua.getText().trim(), txtNumero.getText().trim(), txtComplemento.getText().trim(), txtBairro.getText().trim(), txtCidade.getText().trim(), txtUf.getText().trim(), codigoIbge);
         String sexoSel = cbSexo.getSelectedIndex() == 0 ? "" : cbSexo.getSelectedItem().toString();
 
-        // O NOVO CONSTRUTOR AQUI!
-        Paciente pacienteAtualizado = new Paciente(
-                txtNome.getText().trim(),
-                txtCpf.getText(),
-                dataNasc,
-                sexoSel,
-                txtCartaoSus.getText().trim(),
-                txtTelefone.getText(),
-                txtTelefone2.getText(),
-                txtAlergias.getText().trim(),
-                txtMedicoEncaminhador.getText().trim(),
-                txtNomeResponsavel.getText().trim(),
-                txtCpfResponsavel.getText(),
-                txtNomeResponsavel2.getText().trim(),
-                txtCpfResponsavel2.getText(),
-                fotoBytes,
-                endereco
-        );
+        Paciente pacienteAtualizado = new Paciente(txtNome.getText().trim(), txtCpf.getText(), dataNasc, sexoSel, txtCartaoSus.getText().trim(), txtTelefone.getText(), txtTelefone2.getText(), txtAlergias.getText().trim(), txtMedicoEncaminhador.getText().trim(), txtNomeResponsavel.getText().trim(), txtCpfResponsavel.getText(), txtNomeResponsavel2.getText().trim(), txtCpfResponsavel2.getText(), fotoBytes, endereco);
 
-        if (pacienteEmEdicao == null) {
-            new PacienteDAO().salvar(pacienteAtualizado);
-            JOptionPane.showMessageDialog(frame, "Paciente cadastrado com sucesso!");
-        } else {
-            pacienteAtualizado.setId(pacienteEmEdicao.getId());
-            new PacienteDAO().atualizar(pacienteAtualizado);
-            JOptionPane.showMessageDialog(frame, "Cadastro atualizado com sucesso!");
-        }
-
+        if (pacienteEmEdicao == null) { new PacienteDAO().salvar(pacienteAtualizado); JOptionPane.showMessageDialog(frame, "Paciente cadastrado com sucesso!"); } else { pacienteAtualizado.setId(pacienteEmEdicao.getId()); new PacienteDAO().atualizar(pacienteAtualizado); JOptionPane.showMessageDialog(frame, "Cadastro atualizado com sucesso!"); }
         frame.trocarTelaCentral(new PainelPacientes(frame));
     }
 
     private class PnlCircularAvatar extends JPanel {
         private Image image = null; private int size;
-        public PnlCircularAvatar(int size) {
-            this.size = size; setPreferredSize(new Dimension(size, size)); setMinimumSize(new Dimension(size, size)); setMaximumSize(new Dimension(size, size)); setOpaque(false);
-            FlatSVGIcon icon = carregarIcone("member-list.svg", size - 40, Cores.CINZA_LABEL); if (icon != null) image = icon.getImage();
-        }
+        public PnlCircularAvatar(int size) { this.size = size; setPreferredSize(new Dimension(size, size)); setMinimumSize(new Dimension(size, size)); setMaximumSize(new Dimension(size, size)); setOpaque(false); FlatSVGIcon icon = carregarIcone("member-list.svg", size - 40, Cores.CINZA_LABEL); if (icon != null) image = icon.getImage(); }
         public void setImage(BufferedImage img) { this.image = img.getScaledInstance(size, size, Image.SCALE_SMOOTH); repaint(); }
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g); Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(new Color(242, 245, 248)); g2.fillOval(0, 0, size - 1, size - 1);
-            if (image != null) { g2.setClip(new java.awt.geom.Ellipse2D.Float(0, 0, size - 1, size - 1));
-                if (image.getWidth(null) < size) g2.drawImage(image, 20, 20, size - 40, size - 40, this); else g2.drawImage(image, 0, 0, size - 1, size - 1, this); }
-            g2.setClip(null); g2.setColor(new Color(210, 210, 210)); g2.setStroke(new BasicStroke(2f)); g2.drawOval(0, 0, size - 1, size - 1); g2.dispose();
-        }
+        protected void paintComponent(Graphics g) { super.paintComponent(g); Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(new Color(242, 245, 248)); g2.fillOval(0, 0, size - 1, size - 1); if (image != null) { g2.setClip(new java.awt.geom.Ellipse2D.Float(0, 0, size - 1, size - 1)); if (image.getWidth(null) < size) g2.drawImage(image, 20, 20, size - 40, size - 40, this); else g2.drawImage(image, 0, 0, size - 1, size - 1, this); } g2.setClip(null); g2.setColor(new Color(210, 210, 210)); g2.setStroke(new BasicStroke(2f)); g2.drawOval(0, 0, size - 1, size - 1); g2.dispose(); }
     }
 
     private String limparMascara(String texto) { String limpo = texto.replace("_", "").replace("/", "").replace("-", "").replace(".", "").replace("(", "").replace(")", "").replace("+", ""); return limpo.trim(); }
@@ -529,17 +439,9 @@ public class PainelFormularioPaciente extends JPanel {
     private void trocarAba(String aba, JButton btnAtivo) { cardLayout.show(pnlCards, aba); JButton[] botoes = {btnNavPessoais, btnNavResponsavel, btnNavEndereco}; for (JButton b : botoes) { b.setFont(new Font("Segoe UI", Font.PLAIN, 16)); b.setForeground(Cores.CINZA_LABEL); } btnAtivo.setFont(new Font("Segoe UI", Font.BOLD, 16)); btnAtivo.setForeground(Cores.VERDE_AQUA); }
     private FlatSVGIcon carregarIcone(String nomeArquivo, int tamanho, Color cor) { try { java.net.URL imgURL = getClass().getResource("/icons/" + nomeArquivo); if (imgURL != null) return (FlatSVGIcon) new FlatSVGIcon(imgURL).derive(tamanho, tamanho).setColorFilter(new FlatSVGIcon.ColorFilter(c -> cor)); return (FlatSVGIcon) new FlatSVGIcon("icons/" + nomeArquivo, tamanho, tamanho).setColorFilter(new FlatSVGIcon.ColorFilter(c -> cor)); } catch (Exception e) { return null; } }
 
-    private void aplicarMascara(JFormattedTextField campo, String formato) {
-        try {
-            MaskFormatter mask = new MaskFormatter(formato);
-            mask.setPlaceholderCharacter('_');
-            campo.setFormatterFactory(new DefaultFormatterFactory(mask));
-        } catch (Exception e) { }
-    }
-
+    private void aplicarMascara(JFormattedTextField campo, String formato) { try { MaskFormatter mask = new MaskFormatter(formato); mask.setPlaceholderCharacter('_'); campo.setFormatterFactory(new DefaultFormatterFactory(mask)); } catch (Exception e) { } }
     private JPanel montarBloco(String titulo, JComponent comp) { return montarBloco(titulo, comp, comp); }
     private JPanel montarBloco(String titulo, JComponent container, JComponent targetRef) { JPanel p = new JPanel(new BorderLayout(0, 5)); p.setOpaque(false); JLabel l = new JLabel(titulo); l.setFont(new Font("Segoe UI", Font.BOLD, 12)); l.setForeground(Cores.CINZA_LABEL); l.setBorder(new EmptyBorder(0, 3, 0, 0)); mapLabels.put(targetRef, l); targetRef.putClientProperty("tituloOriginal", titulo); p.add(l, BorderLayout.NORTH); p.add(container, BorderLayout.CENTER); return p; }
-
     private JTextField criarCampoTexto(String placeholder) { JTextField f = new JTextField(); f.setPreferredSize(new Dimension(0, 45)); f.putClientProperty("JTextField.placeholderText", placeholder); f.setFont(new Font("Segoe UI", Font.PLAIN, 15)); f.setBackground(Color.WHITE); aplicarHoverMinimalista(f); return f; }
     private void configurarCampoFormatado(JFormattedTextField f) { f.setPreferredSize(new Dimension(0, 45)); f.setFont(new Font("Segoe UI", Font.PLAIN, 15)); f.setBackground(Color.WHITE); aplicarHoverMinimalista(f); f.addMouseListener(new MouseAdapter() { public void mouseClicked(MouseEvent e) { if (limparMascara(f.getText()).isEmpty()) f.setCaretPosition(0); }}); f.addFocusListener(new FocusAdapter() { public void focusGained(FocusEvent e) { if (limparMascara(f.getText()).isEmpty()) SwingUtilities.invokeLater(() -> f.setCaretPosition(0)); setErroComponente(f, false, null); }}); }
     private void aplicarHoverMinimalista(JComponent comp) { comp.addMouseListener(new MouseAdapter() { public void mouseEntered(MouseEvent e) { if (comp.isEnabled() && !comp.hasFocus()) comp.setBackground(new Color(242, 248, 248)); } public void mouseExited(MouseEvent e) { if (!comp.hasFocus()) comp.setBackground(Color.WHITE); } }); }

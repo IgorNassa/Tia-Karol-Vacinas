@@ -26,6 +26,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,7 +36,7 @@ import java.util.Map;
 
 public class PainelFormulario extends JPanel {
     private TelaPrincipal frame;
-    private JComboBox<String> cbPacientePrincipal, cbFamiliar, cbVacina, cbStatus, cbPagamento;
+    private JComboBox<String> cbPacientePrincipal, cbFamiliar, cbVacina, cbStatus, cbPagamento, cbLocalAplicacao;
     private JCheckBox chkFamilia, chkRecorrencia;
     private JFormattedTextField txtData, txtHora;
     private JTextField txtDesconto, txtValorTotal, txtIntervaloDias;
@@ -59,7 +60,6 @@ public class PainelFormulario extends JPanel {
         setOpaque(false);
         setLayout(new BorderLayout());
 
-        // HEADER COMPACTO
         JPanel pnlTopo = new JPanel(new BorderLayout(15, 5));
         pnlTopo.setOpaque(false);
         pnlTopo.setBorder(new EmptyBorder(15, 30, 10, 30));
@@ -88,9 +88,6 @@ public class PainelFormulario extends JPanel {
         splitPane.setDividerSize(0);
         splitPane.setResizeWeight(0.38);
 
-        // =========================================================
-        // LADO ESQUERDO: FORMULÁRIO
-        // =========================================================
         JPanel pnlEsquerdoContainer = new JPanel(new BorderLayout());
         pnlEsquerdoContainer.setOpaque(false);
         pnlEsquerdoContainer.setBorder(new EmptyBorder(5, 30, 20, 10));
@@ -103,7 +100,9 @@ public class PainelFormulario extends JPanel {
         cbPacientePrincipal = new JComboBox<>();
         cbPacientePrincipal.addItem("Selecione o paciente principal...");
         listaPacientesCache = new PacienteDAO().listarTodos();
-        for (Paciente p : listaPacientesCache) cbPacientePrincipal.addItem(p.getNome());
+        for (Paciente p : listaPacientesCache) {
+            cbPacientePrincipal.addItem(formatarNomeComIdade(p));
+        }
         configurarCombo(cbPacientePrincipal);
         pnlCardForm.add(montarBloco("PACIENTE PRINCIPAL *", "member-list.svg", cbPacientePrincipal));
         pnlCardForm.add(Box.createVerticalStrut(12));
@@ -155,9 +154,18 @@ public class PainelFormulario extends JPanel {
         pnlCardForm.add(pnlDataHora);
         pnlCardForm.add(Box.createVerticalStrut(12));
 
+        JPanel pnlStatusLocal = new JPanel(new GridLayout(1, 2, 10, 0));
+        pnlStatusLocal.setOpaque(false);
+
         cbStatus = new JComboBox<>(new String[]{"Aplicado", "Agendado"});
         configurarCombo(cbStatus);
-        pnlCardForm.add(montarBloco("STATUS *", "check-circle.svg", cbStatus));
+        pnlStatusLocal.add(montarBloco("STATUS *", "check-circle.svg", cbStatus));
+
+        cbLocalAplicacao = new JComboBox<>(new String[]{"Não informado", "Deltoide Dir. (Braço)", "Deltoide Esq. (Braço)", "Vasto Lateral Dir. (Perna)", "Vasto Lateral Esq. (Perna)", "Glúteo Direito", "Glúteo Esquerdo", "Via Oral", "Subcutânea", "Outro"});
+        configurarCombo(cbLocalAplicacao);
+        pnlStatusLocal.add(montarBloco("LOCAL APLICADO", null, cbLocalAplicacao));
+
+        pnlCardForm.add(pnlStatusLocal);
         pnlCardForm.add(Box.createVerticalStrut(12));
 
         JPanel pnlRec = new JPanel(new BorderLayout(0, 5));
@@ -220,9 +228,6 @@ public class PainelFormulario extends JPanel {
         pnlEsquerdoContainer.add(scrollEsquerdo, BorderLayout.CENTER);
         splitPane.setLeftComponent(pnlEsquerdoContainer);
 
-        // =========================================================
-        // LADO DIREITO: CARRINHO E FINANCEIRO
-        // =========================================================
         JPanel pnlDireitoWrapper = new JPanel(new BorderLayout(0, 15));
         pnlDireitoWrapper.setOpaque(false);
         pnlDireitoWrapper.setBorder(new EmptyBorder(5, 10, 20, 30));
@@ -298,8 +303,14 @@ public class PainelFormulario extends JPanel {
         pnlRad.add(rbPorcentagem); pnlRad.add(rbReais);
         pnlDesc.add(txtDesconto, BorderLayout.CENTER); pnlDesc.add(pnlRad, BorderLayout.EAST);
 
-        cbPagamento = new JComboBox<>(new String[]{"Pendente", "PIX", "Cartão de Crédito", "Cartão de Débito", "Dinheiro"});
+        // ATUALIZADO: Agora suporta múltiplas formas (Misto)
+        cbPagamento = new JComboBox<>(new String[]{"Pendente", "PIX", "Cartão de Crédito", "Cartão de Débito", "Dinheiro", "Múltiplas Formas..."});
         configurarCombo(cbPagamento);
+        cbPagamento.addActionListener(e -> {
+            if (cbPagamento.getSelectedItem() != null && cbPagamento.getSelectedItem().toString().equals("Múltiplas Formas...")) {
+                abrirModalPagamentoMisto();
+            }
+        });
 
         txtValorTotal = new JTextField("R$ 0,00");
         txtValorTotal.setEditable(false);
@@ -359,14 +370,200 @@ public class PainelFormulario extends JPanel {
         }
     }
 
+    // MODAL DE PAGAMENTO DIVIDIDO
+    private void abrirModalPagamentoMisto() {
+        double totalApagar = 0;
+        try { totalApagar = Double.parseDouble(txtValorTotal.getText().replaceAll("[^0-9,]", "").replace(",", ".")); } catch (Exception ex) {}
+
+        if (totalApagar <= 0) {
+            JOptionPane.showMessageDialog(frame, "O carrinho está vazio ou o valor total está zerado.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            cbPagamento.setSelectedIndex(1); // Volta pro PIX padrão
+            return;
+        }
+
+        JDialog diag = new JDialog(frame, "Dividir Pagamento", true);
+        diag.setSize(600, 500);
+        diag.setLocationRelativeTo(frame);
+        diag.setLayout(new BorderLayout());
+        diag.getContentPane().setBackground(Color.WHITE);
+
+        JPanel pnlTopo = new JPanel(new GridLayout(2, 1));
+        pnlTopo.setBackground(Color.WHITE);
+        pnlTopo.setBorder(new EmptyBorder(20, 30, 10, 30));
+
+        Locale br = new Locale("pt", "BR");
+        JLabel lblTotal = new JLabel(String.format(br, "Total da Venda: R$ %,.2f", totalApagar));
+        lblTotal.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        lblTotal.setForeground(Cores.CINZA_GRAFITE);
+
+        JLabel lblFalta = new JLabel(String.format(br, "Falta Pagar: R$ %,.2f", totalApagar));
+        lblFalta.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        lblFalta.setForeground(new Color(220, 53, 69));
+
+        pnlTopo.add(lblTotal);
+        pnlTopo.add(lblFalta);
+        diag.add(pnlTopo, BorderLayout.NORTH);
+
+        JPanel pnlMeio = new JPanel(new BorderLayout(0, 15));
+        pnlMeio.setBackground(Color.WHITE);
+        pnlMeio.setBorder(new EmptyBorder(10, 30, 10, 30));
+
+        JPanel pnlAdd = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        pnlAdd.setBackground(Color.WHITE);
+
+        JComboBox<String> cbMetodo = new JComboBox<>(new String[]{"PIX", "Cartão de Crédito", "Cartão de Débito", "Dinheiro"});
+        configurarCombo(cbMetodo);
+        cbMetodo.setPreferredSize(new Dimension(180, 40));
+
+        JTextField txtValPag = new JTextField();
+        configurarCampo(txtValPag);
+        txtValPag.setPreferredSize(new Dimension(120, 40));
+        txtValPag.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "0,00");
+
+        JButton btnAddPag = new JButton("Adicionar");
+        btnAddPag.setBackground(Cores.VERDE_AQUA);
+        btnAddPag.setForeground(Color.WHITE);
+        btnAddPag.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btnAddPag.setPreferredSize(new Dimension(100, 40));
+
+        pnlAdd.add(cbMetodo);
+        pnlAdd.add(txtValPag);
+        pnlAdd.add(btnAddPag);
+
+        pnlMeio.add(pnlAdd, BorderLayout.NORTH);
+
+        DefaultTableModel modPag = new DefaultTableModel(new Object[]{"Método Selecionado", "Valor Pago"}, 0) {
+            public boolean isCellEditable(int r, int c) { return false; }
+        };
+        JTable tabPag = new JTable(modPag);
+        tabPag.setRowHeight(35);
+        tabPag.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        tabPag.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
+
+        JPanel pnlTabela = new JPanel(new BorderLayout(0, 5));
+        pnlTabela.setOpaque(false);
+        pnlTabela.add(new JScrollPane(tabPag), BorderLayout.CENTER);
+        JLabel lblDica = new JLabel("Dica: Dê um duplo clique na linha para remover um pagamento errado.");
+        lblDica.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+        lblDica.setForeground(Cores.CINZA_LABEL);
+        pnlTabela.add(lblDica, BorderLayout.SOUTH);
+
+        pnlMeio.add(pnlTabela, BorderLayout.CENTER);
+        diag.add(pnlMeio, BorderLayout.CENTER);
+
+        JButton btnConfirmar = new JButton("Confirmar Pagamento Misto");
+        btnConfirmar.setBackground(Cores.ROSA_KAROL);
+        btnConfirmar.setForeground(Color.WHITE);
+        btnConfirmar.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        btnConfirmar.setPreferredSize(new Dimension(0, 50));
+        btnConfirmar.setEnabled(false);
+
+        final double[] falta = {totalApagar};
+        final boolean[] confirmado = {false};
+
+        btnAddPag.addActionListener(e -> {
+            try {
+                double v = Double.parseDouble(txtValPag.getText().replace(".", "").replace(",", "."));
+                if (v <= 0) return;
+                if (v > falta[0] + 0.01) {
+                    JOptionPane.showMessageDialog(diag, "O valor digitado é maior que o restante a pagar!", "Aviso", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                modPag.addRow(new Object[]{cbMetodo.getSelectedItem(), v});
+                falta[0] -= v;
+                if(falta[0] < 0) falta[0] = 0;
+
+                lblFalta.setText(String.format(br, "Falta Pagar: R$ %,.2f", falta[0]));
+                if (falta[0] <= 0.01) {
+                    lblFalta.setText("Falta Pagar: R$ 0,00");
+                    lblFalta.setForeground(new Color(39, 174, 96));
+                    btnConfirmar.setEnabled(true);
+                    btnAddPag.setEnabled(false);
+                }
+                txtValPag.setText("");
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(diag, "Digite um valor numérico válido (Ex: 150,00).", "Erro", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        tabPag.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    int r = tabPag.getSelectedRow();
+                    if (r >= 0) {
+                        double v = (double) modPag.getValueAt(r, 1);
+                        falta[0] += v;
+                        modPag.removeRow(r);
+                        lblFalta.setText(String.format(br, "Falta Pagar: R$ %,.2f", falta[0]));
+                        lblFalta.setForeground(new Color(220, 53, 69));
+                        btnConfirmar.setEnabled(false);
+                        btnAddPag.setEnabled(true);
+                    }
+                }
+            }
+        });
+
+        JPanel pnlBot = new JPanel(new BorderLayout());
+        pnlBot.setBorder(new EmptyBorder(10, 30, 20, 30));
+        pnlBot.setBackground(Color.WHITE);
+        pnlBot.add(btnConfirmar, BorderLayout.CENTER);
+        diag.add(pnlBot, BorderLayout.SOUTH);
+
+        btnConfirmar.addActionListener(e -> {
+            StringBuilder sb = new StringBuilder("Misto: ");
+            for (int i=0; i<modPag.getRowCount(); i++) {
+                if (i>0) sb.append(" + ");
+                sb.append(modPag.getValueAt(i, 0)).append(" (R$ ").append(String.format(br, "%.2f", modPag.getValueAt(i,1))).append(")");
+            }
+            confirmado[0] = true;
+            cbPagamento.removeItem(sb.toString()); // Remove se ja existir um igual
+            cbPagamento.addItem(sb.toString());
+            cbPagamento.setSelectedItem(sb.toString());
+            diag.dispose();
+        });
+
+        diag.addWindowListener(new WindowAdapter() {
+            public void windowClosing(WindowEvent e) {
+                if (!confirmado[0]) cbPagamento.setSelectedIndex(1); // Volta pro PIX se fechar no X
+            }
+        });
+
+        diag.setVisible(true);
+    }
+
+    private String formatarNomeComIdade(Paciente p) {
+        if (p.getDataNascimento() == null) return p.getNome() + " (Idade não informada)";
+        LocalDate hoje = LocalDate.now();
+        Period periodo = Period.between(p.getDataNascimento(), hoje);
+        int a = periodo.getYears(); int m = periodo.getMonths(); int d = periodo.getDays();
+        StringBuilder idade = new StringBuilder();
+        if (a > 0) idade.append(a).append(a == 1 ? " ano" : " anos");
+        if (m > 0) { if (idade.length() > 0) idade.append(", "); idade.append(m).append(m == 1 ? " mês" : " meses"); }
+        if (d > 0) { if (idade.length() > 0) idade.append(", "); idade.append(d).append(d == 1 ? " dia" : " dias"); }
+        if (idade.length() == 0) idade.append("Recém-nascido");
+        return p.getNome() + " (" + idade.toString() + ")";
+    }
+
     private void carregarItemParaEdicao(int rowIndex) {
         indiceItemEditado = rowIndex;
         Aplicacao app = itensCarrinho.get(rowIndex);
-        cbPacientePrincipal.setSelectedItem(app.getPaciente().getNome());
+
+        for (int i = 0; i < listaPacientesCache.size(); i++) {
+            if (listaPacientesCache.get(i).getId() == app.getPaciente().getId()) {
+                cbPacientePrincipal.setSelectedIndex(i + 1);
+                break;
+            }
+        }
+
         for(int i=0; i<cbVacina.getItemCount(); i++) { if (cbVacina.getItemAt(i).contains(app.getVacina().getLote())) { cbVacina.setSelectedIndex(i); break; } }
         txtData.setText(app.getDataHora().toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
         txtHora.setText(app.getDataHora().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
         cbStatus.setSelectedItem(app.getStatus());
+
+        String loc = app.getLocalAplicacao();
+        if(loc == null || loc.isEmpty()) cbLocalAplicacao.setSelectedIndex(0);
+        else cbLocalAplicacao.setSelectedItem(loc);
+
         if (chkRecorrencia != null) chkRecorrencia.getParent().setVisible(false);
         btnAdicionarItem.setText(" Salvar Alteração");
         btnAdicionarItem.setBackground(Cores.ROSA_KAROL);
@@ -377,6 +574,7 @@ public class PainelFormulario extends JPanel {
         indiceItemEditado = -1;
         cbVacina.setSelectedIndex(0);
         cbStatus.setSelectedIndex(0);
+        cbLocalAplicacao.setSelectedIndex(0);
         if (chkRecorrencia != null) chkRecorrencia.getParent().setVisible(true);
         btnAdicionarItem.setText(" Adicionar");
         btnAdicionarItem.setBackground(Cores.VERDE_AQUA);
@@ -392,7 +590,7 @@ public class PainelFormulario extends JPanel {
                 chkFamilia.setVisible(true);
                 cbFamiliar.removeAllItems();
                 cbFamiliar.addItem("Selecione o familiar...");
-                for (Paciente fam : listaFamiliaresAtuais) cbFamiliar.addItem(fam.getNome());
+                for (Paciente fam : listaFamiliaresAtuais) cbFamiliar.addItem(formatarNomeComIdade(fam));
                 return;
             }
         }
@@ -415,10 +613,11 @@ public class PainelFormulario extends JPanel {
         if (chkFamilia != null && chkFamilia.isSelected() && cbFamiliar.getSelectedIndex() > 0) pAlvo = listaFamiliaresAtuais.get(cbFamiliar.getSelectedIndex() - 1);
 
         String status = cbStatus.getSelectedItem().toString();
+        String localApp = cbLocalAplicacao.getSelectedIndex() > 0 ? cbLocalAplicacao.getSelectedItem().toString() : "";
 
         if (indiceItemEditado == -1) {
             Aplicacao app = new Aplicacao();
-            app.setPaciente(pAlvo); app.setVacina(v); app.setDataHora(LocalDateTime.of(dataDef, horaDef)); app.setStatus(status); app.setValor(v.getValorVenda()); app.setValorBruto(v.getValorVenda());
+            app.setPaciente(pAlvo); app.setVacina(v); app.setDataHora(LocalDateTime.of(dataDef, horaDef)); app.setStatus(status); app.setValor(v.getValorVenda()); app.setValorBruto(v.getValorVenda()); app.setLocalAplicacao(localApp);
             itensCarrinho.add(app); adicionarLinhaTabela(app);
 
             if (chkRecorrencia != null && chkRecorrencia.isSelected()) {
@@ -428,7 +627,7 @@ public class PainelFormulario extends JPanel {
                     LocalDate dFutura = dataDef.plusDays((long) dias * i);
                     if (dFutura.getDayOfWeek() == DayOfWeek.SUNDAY) dFutura = dFutura.plusDays(1);
                     Aplicacao appRec = new Aplicacao();
-                    appRec.setPaciente(pAlvo); appRec.setVacina(v); appRec.setDataHora(LocalDateTime.of(dFutura, horaDef)); appRec.setStatus("Agendado"); appRec.setValor(v.getValorVenda()); appRec.setValorBruto(v.getValorVenda());
+                    appRec.setPaciente(pAlvo); appRec.setVacina(v); appRec.setDataHora(LocalDateTime.of(dFutura, horaDef)); appRec.setStatus("Agendado"); appRec.setValor(v.getValorVenda()); appRec.setValorBruto(v.getValorVenda()); appRec.setLocalAplicacao(""); // Recorrente não tem local definido ainda
                     itensCarrinho.add(appRec); adicionarLinhaTabela(appRec);
                 }
             }
@@ -437,7 +636,7 @@ public class PainelFormulario extends JPanel {
             double valAntigo = app.getValorBruto() > 0 ? app.getValorBruto() : app.getValor();
             valorBrutoCarrinho -= valAntigo;
 
-            app.setPaciente(pAlvo); app.setVacina(v); app.setDataHora(LocalDateTime.of(dataDef, horaDef)); app.setStatus(status); app.setValor(v.getValorVenda()); app.setValorBruto(v.getValorVenda());
+            app.setPaciente(pAlvo); app.setVacina(v); app.setDataHora(LocalDateTime.of(dataDef, horaDef)); app.setStatus(status); app.setValor(v.getValorVenda()); app.setValorBruto(v.getValorVenda()); app.setLocalAplicacao(localApp);
             valorBrutoCarrinho += app.getValorBruto();
 
             modeloCarrinho.setValueAt(pAlvo.getNome().split(" ")[0], indiceItemEditado, 0);
@@ -470,7 +669,15 @@ public class PainelFormulario extends JPanel {
             String dTexto = txtDesconto.getText().replace(",", "."); if (dTexto.isEmpty()) dTexto = "0";
             double desc = Double.parseDouble(dTexto);
             double total = rbPorcentagem.isSelected() ? valorBrutoCarrinho - (valorBrutoCarrinho * (desc / 100)) : valorBrutoCarrinho - desc;
-            txtValorTotal.setText(String.format(new Locale("pt", "BR"), "R$ %,.2f", Math.max(0.00, total)));
+
+            String novoTotalTexto = String.format(new Locale("pt", "BR"), "R$ %,.2f", Math.max(0.00, total));
+
+            // Segurança Anti-Fraude: Se alteraram o desconto e o pagamento atual é Misto, ele cancela o Misto.
+            if (!txtValorTotal.getText().equals(novoTotalTexto) && cbPagamento.getSelectedItem() != null && cbPagamento.getSelectedItem().toString().startsWith("Misto:")) {
+                cbPagamento.setSelectedIndex(1); // Reseta para PIX
+            }
+
+            txtValorTotal.setText(novoTotalTexto);
         } catch (Exception e) { txtValorTotal.setText(String.format("R$ %.2f", valorBrutoCarrinho)); }
     }
 
@@ -499,18 +706,15 @@ public class PainelFormulario extends JPanel {
         frame.trocarTelaCentral(new PainelAplicacoes(frame));
     }
 
-    // =========================================================
-    // MELHORIA ESTÉTICA COM FLATLAF CLIENT PROPERTIES
-    // =========================================================
-
     private void configurarCombo(JComboBox<?> cb) {
-        cb.setPreferredSize(new Dimension(0, 20));
+        cb.setPreferredSize(new Dimension(0, 36));
         cb.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cb.putClientProperty(FlatClientProperties.STYLE, ""
-                + "focusWidth: 1;"          // Borda fina e suave ao clicar
+                + "arc: 5;"
+                + "focusWidth: 1;"
+                + "focusColor: #20b2aa;"
                 + "hoverBackground: #f4f6f8;"
                 + "buttonHoverArrowColor: #20b2aa"
-                + "padding: 5,10,5,10"
         );
     }
 
