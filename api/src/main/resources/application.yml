@@ -19,3 +19,9 @@ server:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+bootstrap:
+  admin:
+    email: ${BOOTSTRAP_ADMIN_EMAIL:}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+    name: ${BOOTSTRAP_ADMIN_NAME:Administrador}

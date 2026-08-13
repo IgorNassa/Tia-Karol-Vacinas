@@ -12,6 +12,8 @@ Módulo independente do Swing legado. A API será migrada por domínio, começan
 
 ```powershell
 docker compose up -d
+$env:BOOTSTRAP_ADMIN_EMAIL = "admin@tiakarol.local"
+$env:BOOTSTRAP_ADMIN_PASSWORD = "troque-esta-senha"
 mvn spring-boot:run
 ```
 
@@ -28,3 +30,7 @@ mvn spring-boot:run
 - Estados oficiais de agenda são validados.
 
 As regras que dependem de transação (reserva, baixa, devolução, inativação e auditoria automática) serão implementadas na camada de aplicação antes de expor os endpoints de negócio.
+
+## Acesso local
+
+Os endpoints de negócio usam HTTP Basic temporariamente durante a fundação da API. O primeiro administrador é criado apenas quando as variáveis `BOOTSTRAP_ADMIN_EMAIL` e `BOOTSTRAP_ADMIN_PASSWORD` forem informadas. A migração para login com token será feita antes do frontend.
