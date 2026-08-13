@@ -1,6 +1,7 @@
 package br.com.tiakarol.api.configuration;
 
 import br.com.tiakarol.api.patient.PatientDomainException;
+import br.com.tiakarol.api.stock.StockDomainException;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -13,6 +14,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 class ApiExceptionHandler {
     @ExceptionHandler(PatientDomainException.class)
     ResponseEntity<Map<String, Object>> patientDomain(PatientDomainException exception) {
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
+    }
+
+    @ExceptionHandler(StockDomainException.class)
+    ResponseEntity<Map<String, Object>> stockDomain(StockDomainException exception) {
         return error(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
     }
 

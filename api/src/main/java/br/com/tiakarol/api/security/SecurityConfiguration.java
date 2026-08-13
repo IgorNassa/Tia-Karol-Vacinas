@@ -6,6 +6,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -20,6 +21,8 @@ class SecurityConfiguration {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/v1/health", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/v1/patients/**").hasAnyRole("ADMIN", "ATTENDANT")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vaccine-lots/**").hasAnyRole("ADMIN", "ATTENDANT")
+                        .requestMatchers("/api/v1/vaccine-lots/**").hasRole("ADMIN")
                         .anyRequest().hasRole("ADMIN"))
                 .httpBasic(Customizer.withDefaults())
                 .build();
