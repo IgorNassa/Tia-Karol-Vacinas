@@ -14,7 +14,7 @@ CREATE TABLE patients (
     full_name VARCHAR(255) NOT NULL,
     identity_type VARCHAR(30) NOT NULL CHECK (identity_type IN ('CPF', 'FOREIGN_DOCUMENT', 'NEWBORN')),
     identity_number VARCHAR(50),
-    birth_date DATE NOT NULL CHECK (birth_date <= CURRENT_DATE),
+    birth_date DATE NOT NULL,
     phone VARCHAR(30) NOT NULL,
     allergies TEXT NOT NULL,
     allergies_confirmed BOOLEAN NOT NULL,
