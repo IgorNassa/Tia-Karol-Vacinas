@@ -1,5 +1,6 @@
 package br.com.tiakarol.api.patient;
 
+import br.com.tiakarol.api.audit.AuditService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -12,9 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class PatientService {
     private final PatientRepository repository;
+    private final AuditService auditService;
 
-    PatientService(PatientRepository repository) {
+    PatientService(PatientRepository repository, AuditService auditService) {
         this.repository = repository;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -24,7 +27,9 @@ class PatientService {
                 normalizeIdentity(request.identityNumber()), request.birthDate(), request.phone().trim(),
                 request.allergies().trim(), request.allergiesConfirmed());
         applyDetails(patient, request);
-        return toResponse(repository.save(patient));
+        PatientResponse response = toResponse(repository.save(patient));
+        auditService.log("PATIENT", patient.getId(), "PATIENT_CREATED", null, response, null);
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -41,11 +46,14 @@ class PatientService {
     @Transactional
     PatientResponse update(UUID id, PatientRequest request) {
         Patient patient = find(id);
+        PatientResponse before = toResponse(patient);
         validate(request, patient.getId());
         patient.update(request.fullName().trim(), request.identityType(), normalizeIdentity(request.identityNumber()),
                 request.birthDate(), request.phone().trim(), request.allergies().trim(), request.allergiesConfirmed());
         applyDetails(patient, request);
-        return toResponse(patient);
+        PatientResponse response = toResponse(patient);
+        auditService.log("PATIENT", patient.getId(), "PATIENT_UPDATED", before, response, null);
+        return response;
     }
 
     @Transactional
@@ -54,10 +62,14 @@ class PatientService {
             throw new PatientDomainException("A inativação requer confirmação dupla.");
         }
         Patient patient = find(id);
+        PatientResponse before = toResponse(patient);
         if (patient.isActive()) {
             patient.inactivate();
         }
-        return toResponse(patient);
+        PatientResponse response = toResponse(patient);
+        auditService.log("PATIENT", patient.getId(), "PATIENT_INACTIVATED", before, response,
+                "Confirmação dupla aceita.");
+        return response;
     }
 
     @Transactional
@@ -67,6 +79,8 @@ class PatientService {
                 || patient.getInactivatedAt().isAfter(OffsetDateTime.now().minusMonths(3))) {
             throw new PatientDomainException("O paciente só pode ser excluído após três meses de inativação.");
         }
+        auditService.log("PATIENT", patient.getId(), "PATIENT_DELETED", toResponse(patient), null,
+                "Inativo há pelo menos três meses.");
         repository.delete(patient);
     }
 
