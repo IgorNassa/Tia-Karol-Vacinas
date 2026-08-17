@@ -1,3 +1,6 @@
+CREATE SCHEMA IF NOT EXISTS app;
+SET search_path TO app, public;
+
 CREATE TABLE app_users (
     id UUID PRIMARY KEY,
     full_name VARCHAR(150) NOT NULL,
@@ -128,7 +131,21 @@ CREATE TABLE audit_logs (
     occurred_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE legacy_migration_records (
+    id UUID PRIMARY KEY,
+    migration_run_id UUID NOT NULL,
+    source_system VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(100) NOT NULL,
+    legacy_id VARCHAR(255) NOT NULL,
+    target_id UUID NOT NULL,
+    payload_hash CHAR(64) NOT NULL,
+    migrated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT ux_legacy_migration_source UNIQUE (source_system, entity_type, legacy_id),
+    CONSTRAINT ux_legacy_migration_target UNIQUE (source_system, entity_type, target_id)
+);
+
 CREATE INDEX ix_appointments_patient_id ON appointments(patient_id);
 CREATE INDEX ix_appointments_vaccine_lot_id ON appointments(vaccine_lot_id);
 CREATE INDEX ix_stock_movements_vaccine_lot_id ON stock_movements(vaccine_lot_id);
 CREATE INDEX ix_audit_logs_entity ON audit_logs(entity_type, entity_id);
+CREATE INDEX ix_legacy_migration_run ON legacy_migration_records(migration_run_id);

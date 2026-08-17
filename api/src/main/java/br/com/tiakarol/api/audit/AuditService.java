@@ -1,6 +1,7 @@
 package br.com.tiakarol.api.audit;
 
 import br.com.tiakarol.api.security.CurrentUser;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
@@ -8,6 +9,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class AuditService {
+    private static final TypeReference<Map<String, Object>> AUDIT_DATA_TYPE = new TypeReference<>() { };
+
     private final AuditLogRepository repository;
     private final CurrentUser currentUser;
     private final ObjectMapper objectMapper;
@@ -24,6 +27,6 @@ public class AuditService {
     }
 
     private Map<String, Object> convert(Object source) {
-        return source == null ? null : objectMapper.convertValue(source, Map.class);
+        return source == null ? null : objectMapper.convertValue(source, AUDIT_DATA_TYPE);
     }
 }

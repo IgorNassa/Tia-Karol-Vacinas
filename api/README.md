@@ -6,16 +6,25 @@ Módulo independente do Swing legado. A API será migrada por domínio, começan
 
 - Java 17+
 - Maven 3.9+
-- Docker (para o PostgreSQL local)
+- Docker apenas se optar pelo PostgreSQL local em vez do Supabase
 
 ## Executar localmente
 
 ```powershell
-docker compose up -d
-$env:BOOTSTRAP_ADMIN_EMAIL = "admin@tiakarol.local"
-$env:BOOTSTRAP_ADMIN_PASSWORD = "troque-esta-senha"
+Copy-Item .env.example .env
+# Preencha DATABASE_PASSWORD e, se desejar criar o primeiro administrador,
+# BOOTSTRAP_ADMIN_EMAIL e BOOTSTRAP_ADMIN_PASSWORD.
 mvn spring-boot:run
 ```
+
+## Supabase
+
+O ambiente de desenvolvimento usa o projeto `tia-karol-api-dev`, na região de São Paulo (`sa-east-1`). A aplicação carrega `.env` automaticamente quando iniciada a partir da pasta `api`. Informe somente os segredos localmente; esse arquivo nunca deve ser commitado.
+
+- A API Java conecta diretamente ao PostgreSQL pelo **Session pooler**, porta `5432`, com `sslmode=require`.
+- As tabelas da aplicação ficam no schema privado `app`; a Data API do Supabase permanece desativada.
+- A chave `service_role`/secret key não deve ser colocada no frontend, no repositório ou em arquivos de exemplo.
+- `legacy_migration_records` preserva a correspondência entre registros antigos e novos, permitindo reexecução idempotente da futura migração.
 
 - Health check: `GET http://localhost:8080/api/v1/health`
 - Swagger: `http://localhost:8080/swagger-ui.html`
