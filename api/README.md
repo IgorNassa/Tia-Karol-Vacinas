@@ -37,8 +37,22 @@ O ambiente de desenvolvimento usa o projeto `tia-karol-api-dev`, na região de S
 - Estoque físico e reservado nunca ficam negativos; reserva não excede quantidade física.
 - Ajuste de estoque exige motivo.
 - Estados oficiais de agenda são validados.
+- Cada agendamento reserva exatamente uma dose usando trava transacional no lote.
+- Aplicação reduz, na mesma transação, o estoque físico e o reservado.
+- Cancelamento exige motivo e devolve a reserva sem aumentar artificialmente o estoque físico.
+- Faltas ficam em uma fila de pendências até o administrador devolver ou manter a dose reservada.
 
-As regras que dependem de transação (reserva, baixa, devolução, inativação e auditoria automática) serão implementadas na camada de aplicação antes de expor os endpoints de negócio.
+Reserva, baixa, devolução e auditoria do agendamento já são executadas na mesma transação. A verificação de histórico antes da inativação do paciente será concluída junto ao módulo de histórico clínico.
+
+## Agendamentos
+
+- `POST /api/v1/appointments`: agenda e reserva uma dose.
+- `PATCH /api/v1/appointments/{id}/confirmation`: confirma o atendimento.
+- `PATCH /api/v1/appointments/{id}/application`: registra a aplicação e baixa a dose.
+- `PATCH /api/v1/appointments/{id}/cancellation`: cancela com motivo e libera a reserva.
+- `PATCH /api/v1/appointments/{id}/no-show`: registra falta mantendo a dose pendente.
+- `GET /api/v1/appointments/pending`: lista decisões de estoque pendentes.
+- `PATCH /api/v1/appointments/{id}/no-show-resolution`: decisão administrativa de devolver ou manter a reserva.
 
 ## Acesso local
 
