@@ -2,6 +2,7 @@ package br.com.tiakarol.api.configuration;
 
 import br.com.tiakarol.api.appointment.AppointmentDomainException;
 import br.com.tiakarol.api.patient.PatientDomainException;
+import br.com.tiakarol.api.payment.PaymentDomainException;
 import br.com.tiakarol.api.stock.StockDomainException;
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -25,6 +26,11 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(AppointmentDomainException.class)
     ResponseEntity<Map<String, Object>> appointmentDomain(AppointmentDomainException exception) {
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
+    }
+
+    @ExceptionHandler(PaymentDomainException.class)
+    ResponseEntity<Map<String, Object>> paymentDomain(PaymentDomainException exception) {
         return error(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
     }
 

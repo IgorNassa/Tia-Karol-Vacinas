@@ -5,7 +5,6 @@ Módulo independente do Swing legado. A API será migrada por domínio, começan
 ## Requisitos
 
 - Java 17+
-- Maven 3.9+
 - Docker apenas se optar pelo PostgreSQL local em vez do Supabase
 
 ## Executar localmente
@@ -14,7 +13,7 @@ Módulo independente do Swing legado. A API será migrada por domínio, começan
 Copy-Item .env.example .env
 # Preencha DATABASE_PASSWORD e, se desejar criar o primeiro administrador,
 # BOOTSTRAP_ADMIN_EMAIL e BOOTSTRAP_ADMIN_PASSWORD.
-mvn spring-boot:run
+.\mvnw.cmd spring-boot:run
 ```
 
 ## Supabase
@@ -53,6 +52,14 @@ Reserva, baixa, devolução e auditoria do agendamento já são executadas na me
 - `PATCH /api/v1/appointments/{id}/no-show`: registra falta mantendo a dose pendente.
 - `GET /api/v1/appointments/pending`: lista decisões de estoque pendentes.
 - `PATCH /api/v1/appointments/{id}/no-show-resolution`: decisão administrativa de devolver ou manter a reserva.
+
+## Pagamentos
+
+- `GET /api/v1/appointments/{id}/payments`: consulta o carrinho ativo.
+- `PUT /api/v1/appointments/{id}/payments`: registra ou substitui pagamentos múltiplos.
+- `POST /api/v1/appointments/{id}/payments/void`: estorna o carrinho com motivo; somente administrador.
+
+A soma de débito, crédito, dinheiro e pendência deve ser exatamente igual ao valor final do atendimento. Substituições e estornos preservam o histórico no banco, além do registro de auditoria.
 
 ## Acesso local
 
