@@ -52,4 +52,29 @@ class StockBalance {
         physicalQuantity -= quantity;
         updatedAt = OffsetDateTime.now();
     }
+
+    void reserve(int quantity) {
+        if (quantity > getAvailableQuantity()) {
+            throw new StockDomainException("Saldo disponível insuficiente para reservar esta dose.");
+        }
+        reservedQuantity += quantity;
+        updatedAt = OffsetDateTime.now();
+    }
+
+    void releaseReservation(int quantity) {
+        if (quantity > reservedQuantity) {
+            throw new StockDomainException("A quantidade liberada excede o estoque reservado.");
+        }
+        reservedQuantity -= quantity;
+        updatedAt = OffsetDateTime.now();
+    }
+
+    void applyReservation(int quantity) {
+        if (quantity > reservedQuantity) {
+            throw new StockDomainException("Não existe reserva suficiente para registrar a aplicação.");
+        }
+        reservedQuantity -= quantity;
+        physicalQuantity -= quantity;
+        updatedAt = OffsetDateTime.now();
+    }
 }

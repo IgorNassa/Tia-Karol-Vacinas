@@ -21,6 +21,8 @@ class SecurityConfiguration {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/v1/health", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/api/v1/patients/**").hasAnyRole("ADMIN", "ATTENDANT")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/no-show-resolution").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/appointments/**").hasAnyRole("ADMIN", "ATTENDANT", "APPLICATOR")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vaccine-lots/**").hasAnyRole("ADMIN", "ATTENDANT")
                         .requestMatchers("/api/v1/vaccine-lots/**").hasRole("ADMIN")
                         .anyRequest().hasRole("ADMIN"))
