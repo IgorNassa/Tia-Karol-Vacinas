@@ -7,13 +7,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 record VaccineLotRequest(
-        @NotBlank String vaccineName,
-        String vaccineType,
+        @NotNull UUID vaccineId,
         @NotBlank String lotCode,
         @NotNull @Future LocalDate expirationDate,
-        String manufacturer,
         String supplier,
         String invoiceNumber,
         @NotNull @DecimalMin("0.00") BigDecimal purchasePrice,

@@ -1,6 +1,8 @@
 package br.com.tiakarol.api.patient;
 
 import br.com.tiakarol.api.audit.AuditService;
+import br.com.tiakarol.api.appointment.PatientHistoryEvidence;
+import br.com.tiakarol.api.appointment.PatientHistoryGateway;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -14,10 +16,12 @@ import org.springframework.transaction.annotation.Transactional;
 class PatientService {
     private final PatientRepository repository;
     private final AuditService auditService;
+    private final PatientHistoryGateway patientHistory;
 
-    PatientService(PatientRepository repository, AuditService auditService) {
+    PatientService(PatientRepository repository, AuditService auditService, PatientHistoryGateway patientHistory) {
         this.repository = repository;
         this.auditService = auditService;
+        this.patientHistory = patientHistory;
     }
 
     @Transactional
@@ -56,19 +60,30 @@ class PatientService {
         return response;
     }
 
+    @Transactional(readOnly = true)
+    PatientInactivationPreview previewInactivation(UUID id) {
+        Patient patient = find(id);
+        PatientHistoryEvidence evidence = patientHistory.summarize(id);
+        return new PatientInactivationPreview(id, patient.getFullName(), evidence.hasHistory(), evidence);
+    }
+
     @Transactional
-    PatientResponse inactivate(UUID id, boolean doubleConfirmationAccepted) {
-        if (!doubleConfirmationAccepted) {
-            throw new PatientDomainException("A inativação requer confirmação dupla.");
+    PatientResponse inactivate(UUID id, PatientInactivationRequest request) {
+        if (!request.confirmationAccepted()) {
+            throw new PatientDomainException("A confirmação da inativação é obrigatória.");
         }
         Patient patient = find(id);
+        PatientHistoryEvidence evidence = patientHistory.summarize(id);
+        if (evidence.hasHistory() && !request.historyEvidenceAccepted()) {
+            throw new PatientDomainException("Confirme também que o histórico exibido foi revisado.");
+        }
         PatientResponse before = toResponse(patient);
         if (patient.isActive()) {
             patient.inactivate();
         }
         PatientResponse response = toResponse(patient);
         auditService.log("PATIENT", patient.getId(), "PATIENT_INACTIVATED", before, response,
-                "Confirmação dupla aceita.");
+                evidence.hasHistory() ? "Histórico revisado e confirmação dupla aceita." : "Confirmação aceita.");
         return response;
     }
 

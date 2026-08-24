@@ -35,6 +35,8 @@ class SecurityConfiguration {
                         .requestMatchers("/api/v1/appointments/**").hasAnyRole("ADMIN", "ATTENDANT", "APPLICATOR")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vaccine-lots/**").hasAnyRole("ADMIN", "ATTENDANT")
                         .requestMatchers("/api/v1/vaccine-lots/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vaccines/**").hasAnyRole("ADMIN", "ATTENDANT")
+                        .requestMatchers("/api/v1/vaccines/**").hasRole("ADMIN")
                         .anyRequest().hasRole("ADMIN"))
                 .httpBasic(httpBasic -> httpBasic.disable())
                 .addFilterBefore(bearerFilter, UsernamePasswordAuthenticationFilter.class)

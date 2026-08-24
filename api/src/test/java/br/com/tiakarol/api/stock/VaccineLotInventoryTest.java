@@ -96,8 +96,9 @@ class VaccineLotInventoryTest {
     }
 
     private VaccineLot lot(LocalDate expirationDate, int quantity) {
-        return new VaccineLot(new VaccineLotRequest("Vacina", "Dose", "LOTE-1", expirationDate,
-                "Fabricante", "Fornecedor", "NF-1", BigDecimal.TEN, new BigDecimal("20.00"),
+        Vaccine vaccine = new Vaccine(new VaccineRequest("Vacina", "Dose", "Fabricante"));
+        return new VaccineLot(vaccine, new VaccineLotRequest(vaccine.getId(), "LOTE-1", expirationDate,
+                "Fornecedor", "NF-1", BigDecimal.TEN, new BigDecimal("20.00"),
                 null, quantity));
     }
 }

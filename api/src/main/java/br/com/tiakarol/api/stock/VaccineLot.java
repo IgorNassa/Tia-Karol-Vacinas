@@ -5,6 +5,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
@@ -18,6 +20,9 @@ import java.util.Objects;
 class VaccineLot {
     @Id
     private UUID id;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vaccine_id", nullable = false)
+    private Vaccine vaccine;
     @Column(name = "vaccine_name", nullable = false)
     private String vaccineName;
     @Column(name = "vaccine_type")
@@ -46,13 +51,14 @@ class VaccineLot {
 
     protected VaccineLot() { }
 
-    VaccineLot(VaccineLotRequest request) {
+    VaccineLot(Vaccine vaccine, VaccineLotRequest request) {
         this.id = UUID.randomUUID();
-        this.vaccineName = request.vaccineName().trim();
-        this.vaccineType = trimToNull(request.vaccineType());
+        this.vaccine = vaccine;
+        this.vaccineName = vaccine.getName();
+        this.vaccineType = vaccine.getVaccineType();
         this.lotCode = request.lotCode().trim();
         this.expirationDate = request.expirationDate();
-        this.manufacturer = trimToNull(request.manufacturer());
+        this.manufacturer = vaccine.getManufacturer();
         this.supplier = trimToNull(request.supplier());
         this.invoiceNumber = trimToNull(request.invoiceNumber());
         this.purchasePrice = request.purchasePrice();
@@ -64,6 +70,7 @@ class VaccineLot {
     }
 
     UUID getId() { return id; }
+    Vaccine getVaccine() { return vaccine; }
     String getVaccineName() { return vaccineName; }
     String getVaccineType() { return vaccineType; }
     String getLotCode() { return lotCode; }
@@ -78,13 +85,13 @@ class VaccineLot {
     StockBalance getBalance() { return balance; }
 
     boolean matches(VaccineLotRequest request) {
-        return Objects.equals(vaccineType, trimToNull(request.vaccineType()))
+        return vaccine.getId().equals(request.vaccineId())
                 && expirationDate.equals(request.expirationDate())
-                && Objects.equals(manufacturer, trimToNull(request.manufacturer()))
                 && Objects.equals(supplier, trimToNull(request.supplier()))
                 && Objects.equals(invoiceNumber, trimToNull(request.invoiceNumber()))
                 && purchasePrice.compareTo(request.purchasePrice()) == 0
-                && salePrice.compareTo(request.salePrice()) == 0;
+                && salePrice.compareTo(request.salePrice()) == 0
+                && Objects.equals(notes, trimToNull(request.notes()));
     }
 
     private String trimToNull(String value) {

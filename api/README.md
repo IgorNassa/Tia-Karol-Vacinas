@@ -53,6 +53,22 @@ Reserva, baixa, devolução e auditoria do agendamento já são executadas na me
 - `GET /api/v1/appointments/pending`: lista decisões de estoque pendentes.
 - `PATCH /api/v1/appointments/{id}/no-show-resolution`: decisão administrativa de devolver ou manter a reserva.
 
+## Pacientes
+
+- `GET /api/v1/patients/{id}/inactivation-preview`: exibe contagem e os cinco registros mais recentes do histórico.
+- `PATCH /api/v1/patients/{id}/inactivation`: exige confirmação simples sem histórico e confirmação dupla quando houver agendamento ou aplicação.
+- CPF é validado e permanece único; estrangeiros usam documento livre e recém-nascidos exigem ao menos um responsável documentado.
+
+## Catálogo e estoque
+
+- `POST /api/v1/vaccines`: cadastra a vacina independentemente dos lotes.
+- `GET /api/v1/vaccines`: pesquisa o catálogo por nome com paginação estável.
+- `PUT /api/v1/vaccines/{id}` e `PATCH /api/v1/vaccines/{id}/inactivation`: manutenção administrativa.
+- `POST /api/v1/vaccine-lots`: cria um lote para `vaccineId`; se o mesmo lote já existir com todos os dados iguais, apenas aumenta o saldo.
+- `POST /api/v1/vaccine-lots/{id}/stock-movements`: registra entrada, retorno, ajuste, perda ou vencimento sob trava transacional.
+
+Vacina ou lote inativo e lote vencido não podem ser reservados nem aplicados. O schema preserva os campos antigos do lote durante a transição para facilitar a importação do Swing sem perda de dados.
+
 ## Pagamentos
 
 - `GET /api/v1/appointments/{id}/payments`: consulta o carrinho ativo.

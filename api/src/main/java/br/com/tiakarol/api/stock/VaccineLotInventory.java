@@ -43,6 +43,9 @@ public class VaccineLotInventory {
 
     private VaccineLot operationalLot(UUID lotId) {
         VaccineLot lot = lockedLot(lotId);
+        if (!lot.getVaccine().isActive()) {
+            throw new StockDomainException("Vacina inativa não pode ser reservada ou aplicada.");
+        }
         if (!lot.isActive()) {
             throw new StockDomainException("Lote inativo não pode ser reservado ou aplicado.");
         }

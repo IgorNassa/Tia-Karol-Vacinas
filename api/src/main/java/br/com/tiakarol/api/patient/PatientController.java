@@ -2,7 +2,6 @@ package br.com.tiakarol.api.patient;
 
 import jakarta.validation.Valid;
 import java.net.URI;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -50,8 +49,13 @@ class PatientController {
 
     @PatchMapping("/{id}/inactivation")
     PatientResponse inactivate(@PathVariable UUID id,
-                               @RequestBody Map<String, Boolean> request) {
-        return service.inactivate(id, Boolean.TRUE.equals(request.get("doubleConfirmationAccepted")));
+                               @RequestBody PatientInactivationRequest request) {
+        return service.inactivate(id, request);
+    }
+
+    @GetMapping("/{id}/inactivation-preview")
+    PatientInactivationPreview previewInactivation(@PathVariable UUID id) {
+        return service.previewInactivation(id);
     }
 
     @DeleteMapping("/{id}")
