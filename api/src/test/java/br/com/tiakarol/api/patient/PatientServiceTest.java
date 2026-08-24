@@ -101,7 +101,7 @@ class PatientServiceTest {
     @Test
     void requiresHistoryEvidenceForPatientWithAppointments() {
         Patient patient = patient();
-        when(repository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(repository.findForUpdateById(patient.getId())).thenReturn(Optional.of(patient));
         when(patientHistory.summarize(patient.getId())).thenReturn(new PatientHistoryEvidence(1, 0, List.of()));
 
         assertThatThrownBy(() -> service.inactivate(patient.getId(), new PatientInactivationRequest(true, false)))
@@ -112,7 +112,7 @@ class PatientServiceTest {
     @Test
     void inactivatesPatientWithoutHistoryAfterConfirmation() {
         Patient patient = patient();
-        when(repository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(repository.findForUpdateById(patient.getId())).thenReturn(Optional.of(patient));
         when(patientHistory.summarize(patient.getId())).thenReturn(new PatientHistoryEvidence(0, 0, List.of()));
 
         PatientResponse response = service.inactivate(patient.getId(), new PatientInactivationRequest(true, false));

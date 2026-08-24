@@ -12,7 +12,7 @@ public class PatientStatusGateway {
     }
 
     public void requireActive(UUID patientId) {
-        Patient patient = repository.findById(patientId)
+        Patient patient = repository.findForUpdateById(patientId)
                 .orElseThrow(() -> new PatientDomainException("Paciente não encontrado."));
         if (!patient.isActive()) {
             throw new PatientDomainException("Paciente inativo não pode receber novo agendamento.");

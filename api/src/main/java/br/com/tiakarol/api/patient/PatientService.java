@@ -49,7 +49,7 @@ class PatientService {
 
     @Transactional
     PatientResponse update(UUID id, PatientRequest request) {
-        Patient patient = find(id);
+        Patient patient = findForUpdate(id);
         PatientResponse before = toResponse(patient);
         validate(request, patient.getId());
         patient.update(request.fullName().trim(), request.identityType(), normalizeIdentity(request.identityNumber()),
@@ -72,7 +72,7 @@ class PatientService {
         if (!request.confirmationAccepted()) {
             throw new PatientDomainException("A confirmação da inativação é obrigatória.");
         }
-        Patient patient = find(id);
+        Patient patient = findForUpdate(id);
         PatientHistoryEvidence evidence = patientHistory.summarize(id);
         if (evidence.hasHistory() && !request.historyEvidenceAccepted()) {
             throw new PatientDomainException("Confirme também que o histórico exibido foi revisado.");
@@ -89,7 +89,7 @@ class PatientService {
 
     @Transactional
     void delete(UUID id) {
-        Patient patient = find(id);
+        Patient patient = findForUpdate(id);
         if (patient.isActive() || patient.getInactivatedAt() == null
                 || patient.getInactivatedAt().isAfter(OffsetDateTime.now().minusMonths(3))) {
             throw new PatientDomainException("O paciente só pode ser excluído após três meses de inativação.");
@@ -101,6 +101,11 @@ class PatientService {
 
     private Patient find(UUID id) {
         return repository.findById(id).orElseThrow(() -> new PatientDomainException("Paciente não encontrado."));
+    }
+
+    private Patient findForUpdate(UUID id) {
+        return repository.findForUpdateById(id)
+                .orElseThrow(() -> new PatientDomainException("Paciente não encontrado."));
     }
 
     private void validate(PatientRequest request, UUID currentId) {

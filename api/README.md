@@ -41,7 +41,7 @@ O ambiente de desenvolvimento usa o projeto `tia-karol-api-dev`, na região de S
 - Cancelamento exige motivo e devolve a reserva sem aumentar artificialmente o estoque físico.
 - Faltas ficam em uma fila de pendências até o administrador devolver ou manter a dose reservada.
 
-Reserva, baixa, devolução e auditoria do agendamento já são executadas na mesma transação. A verificação de histórico antes da inativação do paciente será concluída junto ao módulo de histórico clínico.
+Reserva, baixa, devolução e auditoria do agendamento são executadas na mesma transação. A inativação do paciente já exibe evidências do histórico e exige confirmação dupla quando necessário.
 
 ## Agendamentos
 
@@ -52,6 +52,11 @@ Reserva, baixa, devolução e auditoria do agendamento já são executadas na me
 - `PATCH /api/v1/appointments/{id}/no-show`: registra falta mantendo a dose pendente.
 - `GET /api/v1/appointments/pending`: lista decisões de estoque pendentes.
 - `PATCH /api/v1/appointments/{id}/no-show-resolution`: decisão administrativa de devolver ou manter a reserva.
+- `GET /api/v1/appointments?patientId=&status=&fromDate=&toDate=`: consulta a agenda com filtros e paginação.
+- `PATCH /api/v1/appointments/{id}`: altera observações e valores; campos clínicos e paciente são administrativos.
+- `PATCH /api/v1/appointments/{id}/reschedule`: reagenda e transfere a reserva entre lotes de forma atômica; somente administrador.
+
+As operações concorrentes de agenda, paciente e estoque usam travas transacionais. Assim, duas requisições simultâneas não podem consumir ou devolver a mesma reserva duas vezes.
 
 ## Pacientes
 

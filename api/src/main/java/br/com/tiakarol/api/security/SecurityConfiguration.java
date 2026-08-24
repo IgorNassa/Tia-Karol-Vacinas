@@ -32,6 +32,7 @@ class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/appointments/*/payments/void").hasRole("ADMIN")
                         .requestMatchers("/api/v1/appointments/*/payments/**").hasAnyRole("ADMIN", "ATTENDANT")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/no-show-resolution").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/reschedule").hasRole("ADMIN")
                         .requestMatchers("/api/v1/appointments/**").hasAnyRole("ADMIN", "ATTENDANT", "APPLICATOR")
                         .requestMatchers(HttpMethod.GET, "/api/v1/vaccine-lots/**").hasAnyRole("ADMIN", "ATTENDANT")
                         .requestMatchers("/api/v1/vaccine-lots/**").hasRole("ADMIN")

@@ -35,6 +35,10 @@ class Appointment {
     private String cancellationReason;
     @Column(name = "reservation_resolution_reason")
     private String reservationResolutionReason;
+    @Column(name = "rescheduled_at")
+    private OffsetDateTime rescheduledAt;
+    @Column(name = "reschedule_reason")
+    private String rescheduleReason;
     @Column(name = "gross_amount", nullable = false)
     private BigDecimal grossAmount;
     @Column(name = "discount_amount", nullable = false)
@@ -83,6 +87,8 @@ class Appointment {
     BigDecimal getDiscountAmount() { return discountAmount; }
     BigDecimal getFinalAmount() { return finalAmount; }
     OffsetDateTime getAppliedAt() { return appliedAt; }
+    OffsetDateTime getRescheduledAt() { return rescheduledAt; }
+    String getRescheduleReason() { return rescheduleReason; }
 
     void confirm() {
         requireStatus(AppointmentStatus.SCHEDULED, "Somente agendamento pendente pode ser confirmado.");
@@ -133,6 +139,55 @@ class Appointment {
                 ? ReservationStatus.RELEASED : ReservationStatus.RESERVED;
         reservationResolutionReason = reason.trim();
         touch();
+    }
+
+    void updateDetails(UpdateAppointmentRequest request, boolean administrator) {
+        if (!administrator && request.patientId() != null) {
+            throw new AppointmentDomainException("Somente administrador pode alterar o paciente.");
+        }
+        if (!administrator && (request.applicationLocation() != null || request.reactions() != null)) {
+            throw new AppointmentDomainException("Somente administrador pode alterar dados da aplicação.");
+        }
+        if (request.patientId() != null) {
+            if (!isActive()) throw new AppointmentDomainException("Paciente só pode ser alterado em agendamento ativo.");
+            patientId = request.patientId();
+        }
+        BigDecimal newGross = request.grossAmount() == null ? grossAmount : request.grossAmount();
+        BigDecimal newDiscount = request.discountAmount() == null ? discountAmount : request.discountAmount();
+        if (newDiscount.compareTo(newGross) > 0) {
+            throw new AppointmentDomainException("O desconto não pode exceder o valor bruto.");
+        }
+        grossAmount = newGross;
+        discountAmount = newDiscount;
+        finalAmount = newGross.subtract(newDiscount);
+        if (request.notes() != null) notes = trimToNull(request.notes());
+        if (request.applicationLocation() != null || request.reactions() != null) {
+            if (status != AppointmentStatus.APPLIED) {
+                throw new AppointmentDomainException("Dados da aplicação só podem ser alterados após a aplicação.");
+            }
+            if (request.applicationLocation() != null) applicationLocation = trimToNull(request.applicationLocation());
+            if (request.reactions() != null) reactions = trimToNull(request.reactions());
+        }
+        touch();
+    }
+
+    void reschedule(OffsetDateTime newDate, UUID newLotId, String reason) {
+        boolean activeAppointment = isActive();
+        boolean retainedNoShow = status == AppointmentStatus.NO_SHOW && reservationStatus == ReservationStatus.RESERVED;
+        if (!activeAppointment && !retainedNoShow) {
+            throw new AppointmentDomainException("Somente agendamento ativo ou falta com dose mantida pode ser reagendado.");
+        }
+        scheduledAt = newDate;
+        vaccineLotId = newLotId;
+        status = AppointmentStatus.SCHEDULED;
+        reservationStatus = ReservationStatus.RESERVED;
+        rescheduledAt = OffsetDateTime.now();
+        rescheduleReason = reason.trim();
+        touch();
+    }
+
+    private boolean isActive() {
+        return status == AppointmentStatus.SCHEDULED || status == AppointmentStatus.CONFIRMED;
     }
 
     private void requireStatus(AppointmentStatus expected, String message) {
