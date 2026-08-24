@@ -44,8 +44,24 @@ class ApplicationUser {
     }
 
     UUID getId() { return id; }
+    String getFullName() { return fullName; }
     String getEmail() { return email; }
     String getPasswordHash() { return passwordHash; }
     UserRole getRole() { return role; }
     boolean isActive() { return active; }
+    OffsetDateTime getCreatedAt() { return createdAt; }
+    OffsetDateTime getUpdatedAt() { return updatedAt; }
+
+    void update(String fullName, String email, UserRole role, boolean active) {
+        this.fullName = fullName;
+        this.email = email;
+        this.role = role;
+        this.active = active;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
+    void changePassword(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.updatedAt = OffsetDateTime.now();
+    }
 }

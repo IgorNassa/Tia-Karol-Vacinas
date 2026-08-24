@@ -4,6 +4,8 @@ import br.com.tiakarol.api.appointment.AppointmentDomainException;
 import br.com.tiakarol.api.patient.PatientDomainException;
 import br.com.tiakarol.api.payment.PaymentDomainException;
 import br.com.tiakarol.api.stock.StockDomainException;
+import br.com.tiakarol.api.security.SecurityDomainException;
+import br.com.tiakarol.api.security.AuthenticationDomainException;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -31,6 +33,16 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(PaymentDomainException.class)
     ResponseEntity<Map<String, Object>> paymentDomain(PaymentDomainException exception) {
+        return error(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
+    }
+
+    @ExceptionHandler(AuthenticationDomainException.class)
+    ResponseEntity<Map<String, Object>> authenticationDomain(AuthenticationDomainException exception) {
+        return error(HttpStatus.UNAUTHORIZED, exception.getMessage());
+    }
+
+    @ExceptionHandler(SecurityDomainException.class)
+    ResponseEntity<Map<String, Object>> securityDomain(SecurityDomainException exception) {
         return error(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
     }
 

@@ -41,3 +41,7 @@ bootstrap:
     email: ${BOOTSTRAP_ADMIN_EMAIL:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}
     name: ${BOOTSTRAP_ADMIN_NAME:Administrador}
+
+auth:
+  access-token-minutes: ${AUTH_ACCESS_TOKEN_MINUTES:15}
+  refresh-token-days: ${AUTH_REFRESH_TOKEN_DAYS:7}

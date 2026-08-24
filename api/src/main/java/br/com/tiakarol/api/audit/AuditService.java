@@ -22,7 +22,12 @@ public class AuditService {
     }
 
     public void log(String entityType, UUID entityId, String action, Object beforeData, Object afterData, String reason) {
-        repository.save(new AuditLog(currentUser.id(), entityType, entityId, action, convert(beforeData),
+        logAs(currentUser.id(), entityType, entityId, action, beforeData, afterData, reason);
+    }
+
+    public void logAs(UUID actorId, String entityType, UUID entityId, String action, Object beforeData,
+                      Object afterData, String reason) {
+        repository.save(new AuditLog(actorId, entityType, entityId, action, convert(beforeData),
                 convert(afterData), reason));
     }
 

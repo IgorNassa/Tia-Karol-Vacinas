@@ -63,4 +63,11 @@ A soma de débito, crédito, dinheiro e pendência deve ser exatamente igual ao 
 
 ## Acesso local
 
-Os endpoints de negócio usam HTTP Basic temporariamente durante a fundação da API. O primeiro administrador é criado apenas quando as variáveis `BOOTSTRAP_ADMIN_EMAIL` e `BOOTSTRAP_ADMIN_PASSWORD` forem informadas. A migração para login com token será feita antes do frontend.
+O primeiro administrador é criado apenas quando `BOOTSTRAP_ADMIN_EMAIL` e `BOOTSTRAP_ADMIN_PASSWORD` forem informados.
+
+- `POST /api/v1/auth/login`: gera access token de 15 minutos e refresh token de 7 dias.
+- `POST /api/v1/auth/refresh`: rotaciona o refresh token e revoga a sessão anterior.
+- `POST /api/v1/auth/logout`: revoga imediatamente a sessão atual.
+- `/api/v1/users/**`: gestão administrativa de usuários e redefinição de senha.
+
+Os tokens são opacos e aleatórios; somente hashes SHA-256 ficam armazenados no banco. Inativação ou redefinição de senha revoga todas as sessões do usuário. Nesta versão, somente `ADMIN` e `ATTENDANT` podem ser cadastrados.
