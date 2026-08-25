@@ -30,6 +30,10 @@ class PaymentEntry {
     private OffsetDateTime voidedAt;
     @Column(name = "void_reason")
     private String voidReason;
+    @Column(name = "received_at")
+    private OffsetDateTime receivedAt;
+    @Column(name = "legacy_method")
+    private String legacyMethod;
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
     @Column(name = "updated_at", nullable = false)
@@ -46,12 +50,18 @@ class PaymentEntry {
         this.active = true;
         this.createdAt = OffsetDateTime.now();
         this.updatedAt = this.createdAt;
+        this.receivedAt = method == PaymentMethod.PENDING ? null : this.createdAt;
     }
 
     UUID getId() { return id; }
     PaymentMethod getMethod() { return method; }
     BigDecimal getAmount() { return amount; }
     OffsetDateTime getCreatedAt() { return createdAt; }
+    boolean isActive() { return active; }
+    OffsetDateTime getVoidedAt() { return voidedAt; }
+    String getVoidReason() { return voidReason; }
+    OffsetDateTime getReceivedAt() { return receivedAt; }
+    String getLegacyMethod() { return legacyMethod; }
 
     void voidEntry(String reason) {
         if (!active) {

@@ -30,6 +30,16 @@ class PaymentService {
         return response(billing.expectedAmount(), appointmentId, activeEntries(appointmentId), false);
     }
 
+    @Transactional(readOnly = true)
+    PaymentHistoryResponse history(UUID appointmentId) {
+        billingGateway.getBilling(appointmentId);
+        List<PaymentHistoryResponse.Entry> entries = repository.findByAppointmentIdOrderByCreatedAtAsc(appointmentId)
+                .stream().map(entry -> new PaymentHistoryResponse.Entry(entry.getId(), entry.getMethod(),
+                        entry.getAmount(), entry.isActive(), entry.getReceivedAt(), entry.getCreatedAt(),
+                        entry.getVoidedAt(), entry.getVoidReason(), entry.getLegacyMethod())).toList();
+        return new PaymentHistoryResponse(appointmentId, entries);
+    }
+
     @Transactional
     PaymentCartResponse replace(UUID appointmentId, PaymentCartRequest request) {
         var billing = billingGateway.lockForPayment(appointmentId);
@@ -37,6 +47,7 @@ class PaymentService {
         List<PaymentEntry> previous = activeEntries(appointmentId);
         PaymentCartResponse before = response(billing.expectedAmount(), appointmentId, previous, false);
         previous.forEach(entry -> entry.voidEntry("Carrinho de pagamento substituído."));
+        if (!previous.isEmpty()) repository.flush();
         List<PaymentEntry> entries = request.payments().stream()
                 .map(item -> new PaymentEntry(appointmentId, item.method(), item.amount(), currentUser.id()))
                 .toList();
@@ -73,6 +84,11 @@ class PaymentService {
         if (pendingEntries > 1) {
             throw new PaymentDomainException("O carrinho aceita no máximo um lançamento pendente.");
         }
+        long distinctMethods = request.payments().stream().map(PaymentCartRequest.PaymentItemRequest::method)
+                .distinct().count();
+        if (distinctMethods != request.payments().size()) {
+            throw new PaymentDomainException("Cada forma de pagamento pode aparecer somente uma vez no carrinho.");
+        }
     }
 
     private List<PaymentEntry> activeEntries(UUID appointmentId) {
@@ -82,6 +98,9 @@ class PaymentService {
     private PaymentCartResponse response(BigDecimal expectedAmount, UUID appointmentId,
                                          List<PaymentEntry> entries, boolean voided) {
         BigDecimal total = entries.stream().map(PaymentEntry::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal pending = entries.stream().filter(entry -> entry.getMethod() == PaymentMethod.PENDING)
+                .map(PaymentEntry::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal received = total.subtract(pending);
         PaymentStatus status;
         if (voided) {
             status = PaymentStatus.VOIDED;
@@ -93,9 +112,9 @@ class PaymentService {
         }
         List<PaymentCartResponse.PaymentItemResponse> items = entries.stream()
                 .map(entry -> new PaymentCartResponse.PaymentItemResponse(entry.getId(), entry.getMethod(),
-                        entry.getAmount(), entry.getCreatedAt()))
+                        entry.getAmount(), entry.getReceivedAt(), entry.getCreatedAt()))
                 .toList();
-        return new PaymentCartResponse(appointmentId, expectedAmount, total, status, items);
+        return new PaymentCartResponse(appointmentId, expectedAmount, total, received, pending, status, items);
     }
 
     private void requireReason(String reason) {

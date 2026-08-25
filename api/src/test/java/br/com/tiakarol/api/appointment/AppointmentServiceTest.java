@@ -35,6 +35,8 @@ class AppointmentServiceTest {
     @Mock
     private VaccineLotInventory inventory;
     @Mock
+    private AppointmentPaymentStateGateway paymentState;
+    @Mock
     private CurrentUser currentUser;
     @Mock
     private AuditService auditService;
@@ -43,7 +45,7 @@ class AppointmentServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AppointmentService(repository, patientStatus, inventory, currentUser, auditService);
+        service = new AppointmentService(repository, patientStatus, inventory, paymentState, currentUser, auditService);
     }
 
     @Test
@@ -95,6 +97,7 @@ class AppointmentServiceTest {
         assertThat(response.status()).isEqualTo(AppointmentStatus.CANCELLED);
         assertThat(response.reservationStatus()).isEqualTo(ReservationStatus.RELEASED);
         verify(inventory).release(LOT_ID, 1, appointment.getId(), "Paciente solicitou cancelamento");
+        verify(paymentState).requireNoActivePayment(appointment.getId(), "cancelar o agendamento");
     }
 
     @Test
@@ -214,6 +217,7 @@ class AppointmentServiceTest {
 
         assertThat(response.finalAmount()).isEqualByComparingTo("100.00");
         assertThat(response.notes()).isEqualTo("Observação atualizada");
+        verify(paymentState).requireNoActivePayment(appointment.getId(), "alterar o valor do atendimento");
     }
 
     @Test

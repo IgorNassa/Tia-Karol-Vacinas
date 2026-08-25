@@ -9,8 +9,11 @@ public record PaymentCartResponse(
         UUID appointmentId,
         BigDecimal expectedAmount,
         BigDecimal registeredAmount,
+        BigDecimal receivedAmount,
+        BigDecimal pendingAmount,
         PaymentStatus status,
         List<PaymentItemResponse> payments) {
 
-    public record PaymentItemResponse(UUID id, PaymentMethod method, BigDecimal amount, OffsetDateTime createdAt) { }
+    public record PaymentItemResponse(UUID id, PaymentMethod method, BigDecimal amount,
+                                      OffsetDateTime receivedAt, OffsetDateTime createdAt) { }
 }

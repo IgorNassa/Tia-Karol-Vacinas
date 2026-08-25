@@ -23,14 +23,17 @@ class AppointmentService {
     private final AppointmentRepository repository;
     private final PatientStatusGateway patientStatus;
     private final VaccineLotInventory inventory;
+    private final AppointmentPaymentStateGateway paymentState;
     private final CurrentUser currentUser;
     private final AuditService auditService;
 
     AppointmentService(AppointmentRepository repository, PatientStatusGateway patientStatus,
-                       VaccineLotInventory inventory, CurrentUser currentUser, AuditService auditService) {
+                       VaccineLotInventory inventory, AppointmentPaymentStateGateway paymentState,
+                       CurrentUser currentUser, AuditService auditService) {
         this.repository = repository;
         this.patientStatus = patientStatus;
         this.inventory = inventory;
+        this.paymentState = paymentState;
         this.currentUser = currentUser;
         this.auditService = auditService;
     }
@@ -101,6 +104,7 @@ class AppointmentService {
     AppointmentResponse cancel(UUID id, String reason) {
         requireReason(reason);
         Appointment appointment = findForUpdate(id);
+        paymentState.requireNoActivePayment(id, "cancelar o agendamento");
         AppointmentResponse before = toResponse(appointment);
         appointment.cancel(reason);
         inventory.release(appointment.getVaccineLotId(), DOSE_QUANTITY, appointment.getId(), reason);
@@ -110,6 +114,7 @@ class AppointmentService {
     @Transactional
     AppointmentResponse markNoShow(UUID id) {
         Appointment appointment = findForUpdate(id);
+        paymentState.requireNoActivePayment(id, "registrar a falta");
         AppointmentResponse before = toResponse(appointment);
         appointment.markNoShow();
         return audit(appointment, "APPOINTMENT_NO_SHOW", before, "Aguardando decisão de estoque.");
@@ -134,6 +139,9 @@ class AppointmentService {
         Appointment appointment = findForUpdate(id);
         AppointmentResponse before = toResponse(appointment);
         boolean administrator = currentUser.role() == UserRole.ADMIN;
+        if (request.grossAmount() != null || request.discountAmount() != null) {
+            paymentState.requireNoActivePayment(id, "alterar o valor do atendimento");
+        }
         if (request.patientId() != null) {
             if (!administrator) {
                 throw new AppointmentDomainException("Somente administrador pode alterar o paciente.");

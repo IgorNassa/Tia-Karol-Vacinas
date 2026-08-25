@@ -27,6 +27,11 @@ class PaymentController {
         return service.get(appointmentId);
     }
 
+    @GetMapping("/history")
+    PaymentHistoryResponse history(@PathVariable UUID appointmentId) {
+        return service.history(appointmentId);
+    }
+
     @PutMapping
     PaymentCartResponse replace(@PathVariable UUID appointmentId,
                                 @Valid @RequestBody PaymentCartRequest request) {

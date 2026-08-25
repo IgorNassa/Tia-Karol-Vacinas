@@ -53,11 +53,28 @@ class PaymentServiceTest {
                 item(PaymentMethod.CASH, "50.00")));
 
         assertThat(response.registeredAmount()).isEqualByComparingTo("150.00");
+        assertThat(response.receivedAmount()).isEqualByComparingTo("150.00");
+        assertThat(response.pendingAmount()).isZero();
         assertThat(response.status()).isEqualTo(PaymentStatus.PAID);
         assertThat(response.payments()).hasSize(2);
         verify(repository).saveAll(any());
         verify(auditService).log(eq("PAYMENT_CART"), eq(APPOINTMENT_ID), eq("PAYMENT_CART_REPLACED"),
                 any(), any(), any());
+    }
+
+    @Test
+    void flushesVoidedCartBeforeInsertingReplacement() {
+        payableForUpdate();
+        when(currentUser.id()).thenReturn(USER_ID);
+        PaymentEntry previous = new PaymentEntry(APPOINTMENT_ID, PaymentMethod.PENDING, EXPECTED_AMOUNT, USER_ID);
+        when(repository.findByAppointmentIdAndActiveTrueOrderByCreatedAtAsc(APPOINTMENT_ID))
+                .thenReturn(List.of(previous));
+
+        service.replace(APPOINTMENT_ID, request(item(PaymentMethod.CASH, "150.00")));
+
+        assertThat(previous.isActive()).isFalse();
+        verify(repository).flush();
+        verify(repository).saveAll(any());
     }
 
     @Test
@@ -71,6 +88,8 @@ class PaymentServiceTest {
                 item(PaymentMethod.PENDING, "50.00")));
 
         assertThat(response.status()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(response.receivedAmount()).isEqualByComparingTo("100.00");
+        assertThat(response.pendingAmount()).isEqualByComparingTo("50.00");
     }
 
     @Test
@@ -94,6 +113,35 @@ class PaymentServiceTest {
                 item(PaymentMethod.PENDING, "50.00"))))
                 .isInstanceOf(PaymentDomainException.class)
                 .hasMessage("O carrinho aceita no máximo um lançamento pendente.");
+    }
+
+    @Test
+    void rejectsDuplicatePaymentMethod() {
+        payableForUpdate();
+
+        assertThatThrownBy(() -> service.replace(APPOINTMENT_ID, request(
+                item(PaymentMethod.CASH, "100.00"), item(PaymentMethod.CASH, "50.00"))))
+                .isInstanceOf(PaymentDomainException.class)
+                .hasMessageContaining("somente uma vez");
+
+        verify(repository, never()).saveAll(any());
+    }
+
+    @Test
+    void exposesCompletePaymentHistoryIncludingVoidedEntries() {
+        PaymentEntry entry = new PaymentEntry(APPOINTMENT_ID, PaymentMethod.CASH, EXPECTED_AMOUNT, USER_ID);
+        entry.voidEntry("Correção");
+        when(billingGateway.getBilling(APPOINTMENT_ID))
+                .thenReturn(new AppointmentBillingGateway.BillingDetails(APPOINTMENT_ID, EXPECTED_AMOUNT));
+        when(repository.findByAppointmentIdOrderByCreatedAtAsc(APPOINTMENT_ID)).thenReturn(List.of(entry));
+
+        PaymentHistoryResponse response = service.history(APPOINTMENT_ID);
+
+        assertThat(response.entries()).singleElement().satisfies(history -> {
+            assertThat(history.active()).isFalse();
+            assertThat(history.voidReason()).isEqualTo("Correção");
+            assertThat(history.receivedAt()).isNotNull();
+        });
     }
 
     @Test

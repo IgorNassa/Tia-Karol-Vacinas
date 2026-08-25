@@ -79,8 +79,23 @@ Vacina ou lote inativo e lote vencido não podem ser reservados nem aplicados. O
 - `GET /api/v1/appointments/{id}/payments`: consulta o carrinho ativo.
 - `PUT /api/v1/appointments/{id}/payments`: registra ou substitui pagamentos múltiplos.
 - `POST /api/v1/appointments/{id}/payments/void`: estorna o carrinho com motivo; somente administrador.
+- `GET /api/v1/appointments/{id}/payments/history`: consulta todo o histórico, inclusive versões estornadas; somente administrador.
 
-A soma de débito, crédito, dinheiro e pendência deve ser exatamente igual ao valor final do atendimento. Substituições e estornos preservam o histórico no banco, além do registro de auditoria.
+A soma de débito, crédito, dinheiro e pendência deve ser exatamente igual ao valor final do atendimento. Substituições e estornos preservam o histórico no banco, além do registro de auditoria. Um atendimento com pagamento ativo precisa ter o carrinho estornado antes de alteração de valor, cancelamento ou registro de falta.
+
+## Financeiro e relatórios
+
+- `POST/GET /api/v1/financial/entries`: registra e consulta entradas e saídas avulsas.
+- `POST /api/v1/financial/entries/{id}/void`: estorna um lançamento sem apagar seu histórico.
+- `/api/v1/financial/recurring-expenses`: mantém despesas fixas ou variáveis e registra seus pagamentos.
+- `GET /api/v1/reports/financial/summary`: consolidado realizado e projetado por período.
+- `GET /api/v1/reports/financial/cash-flow`: livro-caixa unificado de atendimentos e lançamentos avulsos.
+- `GET /api/v1/reports/financial/projections`: recebíveis de atendimentos e despesas recorrentes futuras.
+- `GET /api/v1/reports/stock`: quantidades, capital de aquisição e venda potencial por lote.
+- `GET /api/v1/reports/applications`: aplicações por período.
+- `GET /api/v1/reports/patients/{id}/applications`: histórico de aplicações por paciente.
+
+O financeiro administrativo e todos os relatórios são exclusivos do administrador. O atendente acessa apenas o carrinho operacional dentro do atendimento. O schema mantém `legacy_method` para preservar formas de pagamento antigas durante a futura importação do Swing, mesmo que não existam no domínio novo.
 
 ## Acesso local
 
