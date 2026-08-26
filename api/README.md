@@ -107,3 +107,20 @@ O primeiro administrador é criado apenas quando `BOOTSTRAP_ADMIN_EMAIL` e `BOOT
 - `/api/v1/users/**`: gestão administrativa de usuários e redefinição de senha.
 
 Os tokens são opacos e aleatórios; somente hashes SHA-256 ficam armazenados no banco. Inativação ou redefinição de senha revoga todas as sessões do usuário. Nesta versão, somente `ADMIN` e `ATTENDANT` podem ser cadastrados.
+
+## Migração do Swing
+
+O primeiro estágio da migração é exclusivamente de leitura e não grava no Supabase. Ele abre uma transação
+`REPEATABLE READ`, marca a conexão legada como somente leitura, valida as tabelas conhecidas e produz um relatório
+sem nomes, documentos, telefones ou outros dados pessoais.
+
+Variáveis necessárias:
+
+- `LEGACY_DATABASE_URL`: JDBC do PostgreSQL legado.
+- `LEGACY_DATABASE_USERNAME` e `LEGACY_DATABASE_PASSWORD`: credenciais temporárias, nunca versionadas.
+- `LEGACY_MIGRATION_REPORT`: caminho local do JSON; opcional.
+- `LEGACY_MIGRATION_MODE`: deve permanecer como `dry-run` nesta fase.
+
+Execução: `mvn -DskipTests compile exec:java`. O processo retorna código `2` quando encontra erro impeditivo e
+mantém avisos para revisão manual. A futura execução definitiva usará `legacy_migration_records` para relacionar
+cada ID antigo ao UUID novo e impedir duplicidades; ela só será habilitada após a validação do backup real.
