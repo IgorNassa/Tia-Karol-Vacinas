@@ -5,18 +5,24 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class ConnectionFactory {
-
-    private static final String URL = "jdbc:postgresql://192.168.3.13:5432/vacin_control?sslmode=disable";
-
-    private static final String USER = "postgres";
-
-    private static final String PASSWORD = "1234";
-
     public static Connection getConnection() {
+        String url = required("LEGACY_DATABASE_URL", "legacy.database.url");
+        String user = required("LEGACY_DATABASE_USERNAME", "legacy.database.username");
+        String password = required("LEGACY_DATABASE_PASSWORD", "legacy.database.password");
         try {
-            return DriverManager.getConnection(URL, USER, PASSWORD);
+            return DriverManager.getConnection(url, user, password);
         } catch (SQLException e) {
-            throw new RuntimeException("Erro ao conectar com o PostgreSQL: " + e.getMessage());
+            throw new IllegalStateException("Não foi possível conectar ao banco legado. Verifique a configuração.", e);
         }
+    }
+
+    private static String required(String environmentVariable, String systemProperty) {
+        String value = System.getenv(environmentVariable);
+        if (value == null || value.isBlank()) value = System.getProperty(systemProperty);
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("Configuração obrigatória ausente: " + environmentVariable
+                    + " (ou -D" + systemProperty + ").");
+        }
+        return value;
     }
 }

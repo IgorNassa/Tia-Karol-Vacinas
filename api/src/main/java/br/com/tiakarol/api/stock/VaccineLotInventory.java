@@ -41,15 +41,40 @@ public class VaccineLotInventory {
         record(lot, StockMovementType.APPLICATION, quantity, "Aplicação do agendamento " + appointmentId);
     }
 
+    public void transferReservation(UUID sourceLotId, UUID targetLotId, int quantity, UUID appointmentId,
+                                    String reason) {
+        if (sourceLotId.equals(targetLotId)) return;
+        UUID firstId = sourceLotId.compareTo(targetLotId) < 0 ? sourceLotId : targetLotId;
+        UUID secondId = sourceLotId.equals(firstId) ? targetLotId : sourceLotId;
+        VaccineLot first = lockedLot(firstId);
+        VaccineLot second = lockedLot(secondId);
+        VaccineLot source = sourceLotId.equals(firstId) ? first : second;
+        VaccineLot target = targetLotId.equals(firstId) ? first : second;
+        ensureOperational(target);
+        target.getBalance().reserve(quantity);
+        source.getBalance().releaseReservation(quantity);
+        record(source, StockMovementType.CANCELLATION, quantity,
+                "Transferência do agendamento " + appointmentId + ": " + reason.trim());
+        record(target, StockMovementType.RESERVATION, quantity,
+                "Transferência do agendamento " + appointmentId + ": " + reason.trim());
+    }
+
     private VaccineLot operationalLot(UUID lotId) {
         VaccineLot lot = lockedLot(lotId);
+        ensureOperational(lot);
+        return lot;
+    }
+
+    private void ensureOperational(VaccineLot lot) {
+        if (!lot.getVaccine().isActive()) {
+            throw new StockDomainException("Vacina inativa não pode ser reservada ou aplicada.");
+        }
         if (!lot.isActive()) {
             throw new StockDomainException("Lote inativo não pode ser reservado ou aplicado.");
         }
         if (!lot.getExpirationDate().isAfter(LocalDate.now())) {
             throw new StockDomainException("Lote vencido não pode ser reservado ou aplicado.");
         }
-        return lot;
     }
 
     private VaccineLot lockedLot(UUID lotId) {

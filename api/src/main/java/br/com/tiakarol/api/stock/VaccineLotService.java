@@ -15,20 +15,23 @@ class VaccineLotService {
     private final StockMovementRepository movementRepository;
     private final CurrentUser currentUser;
     private final AuditService auditService;
+    private final VaccineService vaccineService;
 
     VaccineLotService(VaccineLotRepository lotRepository, StockMovementRepository movementRepository,
-                      CurrentUser currentUser, AuditService auditService) {
+                      CurrentUser currentUser, AuditService auditService, VaccineService vaccineService) {
         this.lotRepository = lotRepository;
         this.movementRepository = movementRepository;
         this.currentUser = currentUser;
         this.auditService = auditService;
+        this.vaccineService = vaccineService;
     }
 
     @Transactional
-    VaccineLotResponse createOrIncrease(VaccineLotRequest request) {
-        return lotRepository.findByVaccineNameIgnoreCaseAndLotCodeIgnoreCase(request.vaccineName(), request.lotCode())
+    VaccineLotMutationResult createOrIncrease(VaccineLotRequest request) {
+        Vaccine vaccine = vaccineService.findActive(request.vaccineId());
+        return lotRepository.findForUpdateByVaccineIdAndLotCode(request.vaccineId(), request.lotCode())
                 .map(existing -> increaseExisting(existing, request))
-                .orElseGet(() -> createNew(request));
+                .orElseGet(() -> createNew(vaccine, request));
     }
 
     @Transactional(readOnly = true)
@@ -43,13 +46,15 @@ class VaccineLotService {
 
     @Transactional
     VaccineLotResponse move(UUID id, StockMovementRequest request) {
-        VaccineLot lot = find(id);
-        ensureOperational(lot);
+        VaccineLot lot = findForUpdate(id);
         if (request.type() == StockMovementType.ADJUSTMENT && (request.reason() == null || request.reason().isBlank())) {
             throw new StockDomainException("Ajuste manual exige motivo.");
         }
         switch (request.type()) {
-            case ENTRY, RETURN -> lot.getBalance().addPhysical(request.quantity());
+            case ENTRY, RETURN -> {
+                ensureOperational(lot);
+                lot.getBalance().addPhysical(request.quantity());
+            }
             case ADJUSTMENT, LOSS, EXPIRATION -> lot.getBalance().removePhysical(request.quantity());
             default -> throw new StockDomainException("Esse tipo de movimento é controlado pela agenda e não pode ser lançado manualmente.");
         }
@@ -61,16 +66,16 @@ class VaccineLotService {
         return response;
     }
 
-    private VaccineLotResponse createNew(VaccineLotRequest request) {
-        VaccineLot lot = lotRepository.save(new VaccineLot(request));
+    private VaccineLotMutationResult createNew(Vaccine vaccine, VaccineLotRequest request) {
+        VaccineLot lot = lotRepository.save(new VaccineLot(vaccine, request));
         movementRepository.save(new StockMovement(lot, StockMovementType.ENTRY, request.initialQuantity(),
                 "Entrada inicial do lote.", currentUser.id()));
         VaccineLotResponse response = toResponse(lot);
         auditService.log("VACCINE_LOT", lot.getId(), "VACCINE_LOT_CREATED", null, response, null);
-        return response;
+        return new VaccineLotMutationResult(response, true);
     }
 
-    private VaccineLotResponse increaseExisting(VaccineLot existing, VaccineLotRequest request) {
+    private VaccineLotMutationResult increaseExisting(VaccineLot existing, VaccineLotRequest request) {
         if (!existing.matches(request)) {
             throw new StockDomainException("O lote informado já existe com dados divergentes. Revise validade, fornecedor e preços.");
         }
@@ -80,14 +85,22 @@ class VaccineLotService {
         VaccineLotResponse response = toResponse(existing);
         auditService.log("VACCINE_LOT", existing.getId(), "STOCK_ENTRY", null, response,
                 "Entrada adicional no lote existente.");
-        return response;
+        return new VaccineLotMutationResult(response, false);
     }
 
     private VaccineLot find(UUID id) {
         return lotRepository.findById(id).orElseThrow(() -> new StockDomainException("Lote não encontrado."));
     }
 
+    private VaccineLot findForUpdate(UUID id) {
+        return lotRepository.findForUpdateById(id)
+                .orElseThrow(() -> new StockDomainException("Lote não encontrado."));
+    }
+
     private void ensureOperational(VaccineLot lot) {
+        if (!lot.getVaccine().isActive()) {
+            throw new StockDomainException("Vacina inativa não pode receber operação.");
+        }
         if (!lot.isActive()) {
             throw new StockDomainException("Lote inativo não pode receber operação.");
         }
@@ -98,8 +111,9 @@ class VaccineLotService {
 
     private VaccineLotResponse toResponse(VaccineLot lot) {
         StockBalance balance = lot.getBalance();
-        return new VaccineLotResponse(lot.getId(), lot.getVaccineName(), lot.getVaccineType(), lot.getLotCode(),
-                lot.getExpirationDate(), lot.getManufacturer(), lot.getSupplier(), lot.getInvoiceNumber(),
+        Vaccine vaccine = lot.getVaccine();
+        return new VaccineLotResponse(lot.getId(), vaccine.getId(), vaccine.getName(), vaccine.getVaccineType(), lot.getLotCode(),
+                lot.getExpirationDate(), vaccine.getManufacturer(), lot.getSupplier(), lot.getInvoiceNumber(),
                 lot.getPurchasePrice(), lot.getSalePrice(), lot.getNotes(), lot.isActive(), balance.getPhysicalQuantity(),
                 balance.getReservedQuantity(), balance.getAvailableQuantity());
     }

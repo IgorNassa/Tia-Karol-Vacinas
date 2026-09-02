@@ -22,8 +22,12 @@ class VaccineLotController {
 
     @PostMapping
     ResponseEntity<VaccineLotResponse> create(@Valid @RequestBody VaccineLotRequest request) {
-        VaccineLotResponse response = service.createOrIncrease(request);
-        return ResponseEntity.created(URI.create("/api/v1/vaccine-lots/" + response.id())).body(response);
+        VaccineLotMutationResult result = service.createOrIncrease(request);
+        if (!result.created()) {
+            return ResponseEntity.ok(result.response());
+        }
+        return ResponseEntity.created(URI.create("/api/v1/vaccine-lots/" + result.response().id()))
+                .body(result.response());
     }
 
     @GetMapping("/{id}")

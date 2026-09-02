@@ -31,52 +31,63 @@ class VaccineLotServiceTest {
     private CurrentUser currentUser;
     @Mock
     private AuditService auditService;
+    @Mock
+    private VaccineService vaccineService;
 
     private VaccineLotService service;
+    private Vaccine vaccine;
 
     @BeforeEach
     void setUp() {
-        service = new VaccineLotService(lotRepository, movementRepository, currentUser, auditService);
+        service = new VaccineLotService(lotRepository, movementRepository, currentUser, auditService, vaccineService);
+        vaccine = new Vaccine(new VaccineRequest("Tríplice Viral", "Dose", "Fabricante"));
     }
 
     @Test
     void createsLotWithInitialStockAndAudit() {
         VaccineLotRequest request = request(10);
-        when(lotRepository.findByVaccineNameIgnoreCaseAndLotCodeIgnoreCase("Tríplice Viral", "L-001"))
+        when(vaccineService.findActive(vaccine.getId())).thenReturn(vaccine);
+        when(lotRepository.findForUpdateByVaccineIdAndLotCode(vaccine.getId(), "L-001"))
                 .thenReturn(Optional.empty());
         when(lotRepository.save(any(VaccineLot.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(currentUser.id()).thenReturn(USER_ID);
 
-        VaccineLotResponse response = service.createOrIncrease(request);
+        VaccineLotMutationResult result = service.createOrIncrease(request);
+        VaccineLotResponse response = result.response();
 
         assertThat(response.physicalQuantity()).isEqualTo(10);
         assertThat(response.reservedQuantity()).isZero();
         assertThat(response.availableQuantity()).isEqualTo(10);
+        assertThat(result.created()).isTrue();
         verify(movementRepository).save(any(StockMovement.class));
         verify(auditService).log("VACCINE_LOT", response.id(), "VACCINE_LOT_CREATED", null, response, null);
     }
 
     @Test
     void increasesStockWhenEveryLotAttributeMatches() {
-        VaccineLot existing = new VaccineLot(request(5));
-        when(lotRepository.findByVaccineNameIgnoreCaseAndLotCodeIgnoreCase("Tríplice Viral", "L-001"))
+        VaccineLot existing = new VaccineLot(vaccine, request(5));
+        when(vaccineService.findActive(vaccine.getId())).thenReturn(vaccine);
+        when(lotRepository.findForUpdateByVaccineIdAndLotCode(vaccine.getId(), "L-001"))
                 .thenReturn(Optional.of(existing));
         when(currentUser.id()).thenReturn(USER_ID);
 
-        VaccineLotResponse response = service.createOrIncrease(request(7));
+        VaccineLotMutationResult result = service.createOrIncrease(request(7));
+        VaccineLotResponse response = result.response();
 
         assertThat(response.physicalQuantity()).isEqualTo(12);
+        assertThat(result.created()).isFalse();
         verify(lotRepository, never()).save(any());
         verify(movementRepository).save(any(StockMovement.class));
     }
 
     @Test
     void rejectsStockIncreaseWhenExistingLotDataDiverges() {
-        VaccineLot existing = new VaccineLot(request(5));
-        VaccineLotRequest divergent = new VaccineLotRequest("Tríplice Viral", "Dose", "L-001",
-                LocalDate.now().plusYears(2), "Fabricante", "Outro fornecedor", "NF-10",
+        VaccineLot existing = new VaccineLot(vaccine, request(5));
+        VaccineLotRequest divergent = new VaccineLotRequest(vaccine.getId(), "L-001",
+                LocalDate.now().plusYears(2), "Outro fornecedor", "NF-10",
                 new BigDecimal("20.00"), new BigDecimal("50.00"), null, 7);
-        when(lotRepository.findByVaccineNameIgnoreCaseAndLotCodeIgnoreCase("Tríplice Viral", "L-001"))
+        when(vaccineService.findActive(vaccine.getId())).thenReturn(vaccine);
+        when(lotRepository.findForUpdateByVaccineIdAndLotCode(vaccine.getId(), "L-001"))
                 .thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> service.createOrIncrease(divergent))
@@ -88,8 +99,8 @@ class VaccineLotServiceTest {
 
     @Test
     void requiresReasonForManualAdjustment() {
-        VaccineLot lot = new VaccineLot(request(10));
-        when(lotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+        VaccineLot lot = new VaccineLot(vaccine, request(10));
+        when(lotRepository.findForUpdateById(lot.getId())).thenReturn(Optional.of(lot));
 
         assertThatThrownBy(() -> service.move(lot.getId(),
                 new StockMovementRequest(StockMovementType.ADJUSTMENT, 1, " ")))
@@ -99,8 +110,8 @@ class VaccineLotServiceTest {
 
     @Test
     void neverAllowsPhysicalStockBelowReservedOrAvailableQuantity() {
-        VaccineLot lot = new VaccineLot(request(2));
-        when(lotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+        VaccineLot lot = new VaccineLot(vaccine, request(2));
+        when(lotRepository.findForUpdateById(lot.getId())).thenReturn(Optional.of(lot));
 
         assertThatThrownBy(() -> service.move(lot.getId(),
                 new StockMovementRequest(StockMovementType.LOSS, 3, "Frasco quebrado")))
@@ -110,8 +121,8 @@ class VaccineLotServiceTest {
 
     @Test
     void blocksManualMovementTypesOwnedBySchedulingWorkflow() {
-        VaccineLot lot = new VaccineLot(request(10));
-        when(lotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+        VaccineLot lot = new VaccineLot(vaccine, request(10));
+        when(lotRepository.findForUpdateById(lot.getId())).thenReturn(Optional.of(lot));
 
         assertThatThrownBy(() -> service.move(lot.getId(),
                 new StockMovementRequest(StockMovementType.APPLICATION, 1, "Aplicação")))
@@ -120,8 +131,8 @@ class VaccineLotServiceTest {
     }
 
     private VaccineLotRequest request(int quantity) {
-        return new VaccineLotRequest("Tríplice Viral", "Dose", "L-001", LocalDate.now().plusYears(2),
-                "Fabricante", "Fornecedor", "NF-10", new BigDecimal("20.00"),
+        return new VaccineLotRequest(vaccine.getId(), "L-001", LocalDate.now().plusYears(2),
+                "Fornecedor", "NF-10", new BigDecimal("20.00"),
                 new BigDecimal("50.00"), null, quantity);
     }
 }

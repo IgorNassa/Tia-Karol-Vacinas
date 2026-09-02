@@ -79,6 +79,23 @@ class VaccineLotInventoryTest {
     }
 
     @Test
+    void transfersReservationBetweenLotsWithoutChangingPhysicalTotals() {
+        VaccineLot source = lot(LocalDate.now().plusYears(1), 2);
+        VaccineLot target = lot(LocalDate.now().plusYears(1), 3);
+        when(lotRepository.findForUpdateById(source.getId())).thenReturn(Optional.of(source));
+        when(lotRepository.findForUpdateById(target.getId())).thenReturn(Optional.of(target));
+        when(currentUser.id()).thenReturn(USER_ID);
+        inventory.reserve(source.getId(), 1, APPOINTMENT_ID);
+
+        inventory.transferReservation(source.getId(), target.getId(), 1, APPOINTMENT_ID, "Troca de lote");
+
+        assertThat(source.getBalance().getPhysicalQuantity()).isEqualTo(2);
+        assertThat(source.getBalance().getReservedQuantity()).isZero();
+        assertThat(target.getBalance().getPhysicalQuantity()).isEqualTo(3);
+        assertThat(target.getBalance().getReservedQuantity()).isEqualTo(1);
+    }
+
+    @Test
     void expiredLotCanNeverBeReserved() {
         VaccineLot lot = lot(LocalDate.now().minusDays(1), 2);
         when(lotRepository.findForUpdateById(lot.getId())).thenReturn(Optional.of(lot));
@@ -96,8 +113,9 @@ class VaccineLotInventoryTest {
     }
 
     private VaccineLot lot(LocalDate expirationDate, int quantity) {
-        return new VaccineLot(new VaccineLotRequest("Vacina", "Dose", "LOTE-1", expirationDate,
-                "Fabricante", "Fornecedor", "NF-1", BigDecimal.TEN, new BigDecimal("20.00"),
+        Vaccine vaccine = new Vaccine(new VaccineRequest("Vacina", "Dose", "Fabricante"));
+        return new VaccineLot(vaccine, new VaccineLotRequest(vaccine.getId(), "LOTE-1", expirationDate,
+                "Fornecedor", "NF-1", BigDecimal.TEN, new BigDecimal("20.00"),
                 null, quantity));
     }
 }

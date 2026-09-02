@@ -1,4 +1,6 @@
 spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   config:
     import: optional:file:.env[.properties]
   application:
@@ -24,13 +26,54 @@ spring:
       hibernate:
         default_schema: app
     open-in-view: false
+  lifecycle:
+    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:30s}
 
 server:
   port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+  compression:
+    enabled: true
+  max-http-request-header-size: ${MAX_HTTP_REQUEST_HEADER_SIZE:16KB}
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+  tomcat:
+    max-http-form-post-size: ${MAX_HTTP_FORM_POST_SIZE:2MB}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} level=%-5level requestId=%X{requestId:-none} logger=%logger{36} message=\"%replace(%msg){'\"',''}\"%n"
+  level:
+    root: INFO
+    br.com.tiakarol.api: INFO
+    org.hibernate.SQL: WARN
 
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  rate-limit:
+    auth-requests-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:20}
+  openapi:
+    public: ${OPENAPI_PUBLIC:true}
 
 supabase:
   url: ${SUPABASE_URL:}
@@ -41,3 +84,7 @@ bootstrap:
     email: ${BOOTSTRAP_ADMIN_EMAIL:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}
     name: ${BOOTSTRAP_ADMIN_NAME:Administrador}
+
+auth:
+  access-token-minutes: ${AUTH_ACCESS_TOKEN_MINUTES:15}
+  refresh-token-days: ${AUTH_REFRESH_TOKEN_DAYS:7}

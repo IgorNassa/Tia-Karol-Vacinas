@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import br.com.tiakarol.api.audit.AuditService;
 import br.com.tiakarol.api.patient.PatientStatusGateway;
 import br.com.tiakarol.api.security.CurrentUser;
+import br.com.tiakarol.api.security.UserRole;
 import br.com.tiakarol.api.stock.VaccineLotInventory;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -34,6 +35,8 @@ class AppointmentServiceTest {
     @Mock
     private VaccineLotInventory inventory;
     @Mock
+    private AppointmentPaymentStateGateway paymentState;
+    @Mock
     private CurrentUser currentUser;
     @Mock
     private AuditService auditService;
@@ -42,7 +45,7 @@ class AppointmentServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AppointmentService(repository, patientStatus, inventory, currentUser, auditService);
+        service = new AppointmentService(repository, patientStatus, inventory, paymentState, currentUser, auditService);
     }
 
     @Test
@@ -73,7 +76,7 @@ class AppointmentServiceTest {
     @Test
     void appliesAppointmentAndConsumesReservedDose() {
         Appointment appointment = appointment();
-        when(repository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
 
         AppointmentResponse response = service.apply(appointment.getId(),
                 new ApplyAppointmentRequest("Clínica", "Sem reações", "Aplicada no braço esquerdo"));
@@ -87,13 +90,14 @@ class AppointmentServiceTest {
     @Test
     void cancelsActiveAppointmentWithReasonAndReleasesDose() {
         Appointment appointment = appointment();
-        when(repository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
 
         AppointmentResponse response = service.cancel(appointment.getId(), "Paciente solicitou cancelamento");
 
         assertThat(response.status()).isEqualTo(AppointmentStatus.CANCELLED);
         assertThat(response.reservationStatus()).isEqualTo(ReservationStatus.RELEASED);
         verify(inventory).release(LOT_ID, 1, appointment.getId(), "Paciente solicitou cancelamento");
+        verify(paymentState).requireNoActivePayment(appointment.getId(), "cancelar o agendamento");
     }
 
     @Test
@@ -102,13 +106,13 @@ class AppointmentServiceTest {
                 .isInstanceOf(AppointmentDomainException.class)
                 .hasMessage("O motivo é obrigatório.");
 
-        verify(repository, never()).findById(any());
+        verify(repository, never()).findByIdForUpdate(any());
     }
 
     @Test
     void keepsNoShowDoseReservedUntilAdminDecision() {
         Appointment appointment = appointment();
-        when(repository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
 
         AppointmentResponse response = service.markNoShow(appointment.getId());
 
@@ -121,7 +125,7 @@ class AppointmentServiceTest {
     void returnsNoShowDoseToStockWhenAdminChoosesReturn() {
         Appointment appointment = appointment();
         appointment.markNoShow();
-        when(repository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
 
         AppointmentResponse response = service.resolveNoShow(appointment.getId(),
                 new ResolveNoShowRequest(NoShowResolution.RETURN_TO_STOCK, "Paciente não reagendou"));
@@ -134,13 +138,115 @@ class AppointmentServiceTest {
     void keepsNoShowReservationWithoutCreatingStockMovement() {
         Appointment appointment = appointment();
         appointment.markNoShow();
-        when(repository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
 
         AppointmentResponse response = service.resolveNoShow(appointment.getId(),
                 new ResolveNoShowRequest(NoShowResolution.KEEP_RESERVED, "Reagendamento em negociação"));
 
         assertThat(response.reservationStatus()).isEqualTo(ReservationStatus.RESERVED);
         verify(inventory, never()).release(any(), any(Integer.class), any(), any());
+    }
+
+    @Test
+    void reschedulesRetainedNoShowWithoutMovingSameReservation() {
+        Appointment appointment = appointment();
+        appointment.markNoShow();
+        appointment.resolveNoShow(NoShowResolution.KEEP_RESERVED, "Dose mantida");
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(currentUser.role()).thenReturn(UserRole.ADMIN);
+        OffsetDateTime newDate = OffsetDateTime.now().plusDays(5);
+
+        AppointmentResponse response = service.reschedule(appointment.getId(),
+                new RescheduleAppointmentRequest(newDate, null, "Paciente confirmou nova data"));
+
+        assertThat(response.status()).isEqualTo(AppointmentStatus.SCHEDULED);
+        assertThat(response.scheduledAt()).isEqualTo(newDate);
+        assertThat(response.rescheduledAt()).isNotNull();
+        verify(inventory, never()).transferReservation(any(), any(), any(Integer.class), any(), any());
+    }
+
+    @Test
+    void transfersReservationWhenAdminReschedulesToAnotherLot() {
+        Appointment appointment = appointment();
+        UUID newLotId = UUID.randomUUID();
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(currentUser.role()).thenReturn(UserRole.ADMIN);
+
+        AppointmentResponse response = service.reschedule(appointment.getId(),
+                new RescheduleAppointmentRequest(OffsetDateTime.now().plusDays(4), newLotId, "Troca de lote"));
+
+        assertThat(response.vaccineLotId()).isEqualTo(newLotId);
+        verify(inventory).transferReservation(LOT_ID, newLotId, 1, appointment.getId(), "Troca de lote");
+    }
+
+    @Test
+    void rejectsPastRescheduleBeforeLockingAppointment() {
+        assertThatThrownBy(() -> service.reschedule(UUID.randomUUID(),
+                new RescheduleAppointmentRequest(OffsetDateTime.now().minusMinutes(1), null, "Data incorreta")))
+                .isInstanceOf(AppointmentDomainException.class)
+                .hasMessage("O reagendamento precisa estar no futuro.");
+
+        verify(repository, never()).findByIdForUpdate(any());
+        verify(inventory, never()).transferReservation(any(), any(), any(Integer.class), any(), any());
+    }
+
+    @Test
+    void rejectsRescheduleAfterCancellationWithoutMovingReservation() {
+        Appointment appointment = appointment();
+        appointment.cancel("Paciente desistiu");
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(currentUser.role()).thenReturn(UserRole.ADMIN);
+
+        assertThatThrownBy(() -> service.reschedule(appointment.getId(),
+                new RescheduleAppointmentRequest(OffsetDateTime.now().plusDays(3), null, "Nova tentativa")))
+                .isInstanceOf(AppointmentDomainException.class)
+                .hasMessageContaining("Somente agendamento ativo");
+
+        verify(inventory, never()).transferReservation(any(), any(), any(Integer.class), any(), any());
+    }
+
+    @Test
+    void attendantCanEditOnlyNotesAndAmounts() {
+        Appointment appointment = appointment();
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(currentUser.role()).thenReturn(UserRole.ATTENDANT);
+
+        AppointmentResponse response = service.update(appointment.getId(),
+                new UpdateAppointmentRequest(null, new BigDecimal("120.00"), new BigDecimal("20.00"),
+                        "Observação atualizada", null, null));
+
+        assertThat(response.finalAmount()).isEqualByComparingTo("100.00");
+        assertThat(response.notes()).isEqualTo("Observação atualizada");
+        verify(paymentState).requireNoActivePayment(appointment.getId(), "alterar o valor do atendimento");
+    }
+
+    @Test
+    void attendantCannotChangePatient() {
+        Appointment appointment = appointment();
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(currentUser.role()).thenReturn(UserRole.ATTENDANT);
+
+        assertThatThrownBy(() -> service.update(appointment.getId(),
+                new UpdateAppointmentRequest(UUID.randomUUID(), null, null, null, null, null)))
+                .isInstanceOf(AppointmentDomainException.class)
+                .hasMessageContaining("Somente administrador");
+
+        verify(patientStatus, never()).requireActive(any());
+    }
+
+    @Test
+    void attendantCannotChangeApplicationDataOrPartiallyMutateAmounts() {
+        Appointment appointment = appointment();
+        when(repository.findByIdForUpdate(appointment.getId())).thenReturn(Optional.of(appointment));
+        when(currentUser.role()).thenReturn(UserRole.ATTENDANT);
+
+        assertThatThrownBy(() -> service.update(appointment.getId(),
+                new UpdateAppointmentRequest(null, new BigDecimal("150.00"), null, null,
+                        "Clínica externa", null)))
+                .isInstanceOf(AppointmentDomainException.class)
+                .hasMessageContaining("dados da aplicação");
+
+        assertThat(appointment.getGrossAmount()).isEqualByComparingTo("100.00");
     }
 
     private Appointment appointment() {

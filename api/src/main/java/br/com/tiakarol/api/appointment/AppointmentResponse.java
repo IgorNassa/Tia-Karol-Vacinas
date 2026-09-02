@@ -19,5 +19,7 @@ record AppointmentResponse(
         BigDecimal grossAmount,
         BigDecimal discountAmount,
         BigDecimal finalAmount,
-        OffsetDateTime appliedAt) {
+        OffsetDateTime appliedAt,
+        OffsetDateTime rescheduledAt,
+        String rescheduleReason) {
 }

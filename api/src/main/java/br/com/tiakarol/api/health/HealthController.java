@@ -1,5 +1,6 @@
 package br.com.tiakarol.api.health;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 class HealthController {
 
     @GetMapping
+    @SecurityRequirements
     ResponseEntity<Map<String, Object>> health() {
         return ResponseEntity.ok(Map.of("status", "UP", "timestamp", OffsetDateTime.now()));
     }
