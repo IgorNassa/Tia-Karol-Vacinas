@@ -41,3 +41,7 @@ build/
 # Dados e relatórios locais de migração (podem conter informações sensíveis)
 private-migration/
 api/legacy-migration-report*.json
+.env
+api/.env
+*.dump
+*.backup

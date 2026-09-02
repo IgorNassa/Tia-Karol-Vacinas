@@ -1,5 +1,6 @@
 package br.com.tiakarol.api.security;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -21,11 +22,13 @@ class AuthController {
     }
 
     @PostMapping("/login")
+    @SecurityRequirements
     TokenResponse login(@Valid @RequestBody LoginRequest request) {
         return service.login(request);
     }
 
     @PostMapping("/refresh")
+    @SecurityRequirements
     TokenResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return service.refresh(request);
     }

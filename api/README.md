@@ -26,7 +26,21 @@ O ambiente de desenvolvimento usa o projeto `tia-karol-api-dev`, na região de S
 - `legacy_migration_records` preserva a correspondência entre registros antigos e novos, permitindo reexecução idempotente da futura migração.
 
 - Health check: `GET http://localhost:8080/api/v1/health`
+- Liveness: `GET http://localhost:8080/actuator/health/liveness`
+- Readiness: `GET http://localhost:8080/actuator/health/readiness`
 - Swagger: `http://localhost:8080/swagger-ui.html`
+
+## Produção e homologação
+
+- Imagem: `docker build -t tia-karol-api:1.0.0 .`; o container executa como usuário sem privilégios.
+- Em `prod`, banco sem SSL, CORS curinga/localhost e senha provisória impedem a inicialização.
+- Procedimentos de backup, restauração e rollback: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+- Coleta e recebimento do backup legado: [`docs/LEGACY_BACKUP_INTAKE.md`](docs/LEGACY_BACKUP_INTAKE.md).
+- Segurança e retenção LGPD: [`docs/LGPD_AND_SECURITY.md`](docs/LGPD_AND_SECURITY.md).
+- Homologação e coleção: [`docs/HOMOLOGATION.md`](docs/HOMOLOGATION.md) e [`http/tia-karol-api.http`](http/tia-karol-api.http).
+- Publicação: [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md).
+- Swing sem credenciais fixas: [`docs/SWING_CONFIGURATION.md`](docs/SWING_CONFIGURATION.md).
+- Contrato congelado: `openapi/tia-karol-api-v1.json`; compare-o com `scripts/verify-openapi-contract.ps1` enquanto a API estiver rodando.
 
 ## Regras já protegidas pelo schema
 

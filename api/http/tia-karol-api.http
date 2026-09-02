@@ -1,0 +1,129 @@
+@baseUrl = http://localhost:8080
+@email = admin@tiakarol.local
+@password = ChangeMe-LocalOnly-123!
+@accessToken = SUBSTITUA_PELO_ACCESS_TOKEN
+@patientId = 00000000-0000-0000-0000-000000000001
+@vaccineId = 00000000-0000-0000-0000-000000000002
+@lotId = 00000000-0000-0000-0000-000000000003
+@appointmentId = 00000000-0000-0000-0000-000000000004
+
+### Liveness
+GET {{baseUrl}}/actuator/health/liveness
+
+### Readiness (inclui banco)
+GET {{baseUrl}}/actuator/health/readiness
+
+### Login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+X-Request-ID: homolog-login-0001
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Cadastrar paciente brasileiro
+POST {{baseUrl}}/api/v1/patients
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "fullName": "Paciente Homologação",
+  "identityType": "CPF",
+  "identityNumber": "52998224725",
+  "birthDate": "1990-01-01",
+  "phone": "11999999999",
+  "allergies": "Nenhuma",
+  "allergiesConfirmed": true,
+  "address": {
+    "postalCode": "01001000",
+    "street": "Praça da Sé",
+    "number": "1",
+    "district": "Sé",
+    "city": "São Paulo",
+    "state": "SP"
+  },
+  "guardians": []
+}
+
+### Listar pacientes
+GET {{baseUrl}}/api/v1/patients?page=0&size=20
+Authorization: Bearer {{accessToken}}
+
+### Cadastrar vacina
+POST {{baseUrl}}/api/v1/vaccines
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Vacina Homologação",
+  "vaccineType": "Teste",
+  "manufacturer": "Fabricante Teste"
+}
+
+### Cadastrar lote
+POST {{baseUrl}}/api/v1/vaccine-lots
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "vaccineId": "{{vaccineId}}",
+  "lotCode": "HML-001",
+  "expirationDate": "2030-12-31",
+  "supplier": "Fornecedor Teste",
+  "invoiceNumber": "HML-001",
+  "purchasePrice": 50.00,
+  "salePrice": 100.00,
+  "notes": "Dados exclusivos de homologação",
+  "initialQuantity": 10
+}
+
+### Criar agendamento e reservar dose
+POST {{baseUrl}}/api/v1/appointments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "vaccineLotId": "{{lotId}}",
+  "scheduledAt": "2030-06-01T14:00:00-03:00",
+  "grossAmount": 100.00,
+  "discountAmount": 0.00,
+  "notes": "Fluxo de homologação"
+}
+
+### Confirmar agendamento
+PATCH {{baseUrl}}/api/v1/appointments/{{appointmentId}}/confirmation
+Authorization: Bearer {{accessToken}}
+
+### Registrar aplicação
+PATCH {{baseUrl}}/api/v1/appointments/{{appointmentId}}/application
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "applicationLocation": "Braço esquerdo",
+  "reactions": "Nenhuma",
+  "notes": "Aplicação de homologação"
+}
+
+### Registrar carrinho de pagamento
+PUT {{baseUrl}}/api/v1/appointments/{{appointmentId}}/payments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "payments": [
+    {"method": "CREDIT_CARD", "amount": 60.00},
+    {"method": "CASH", "amount": 40.00}
+  ]
+}
+
+### Relatório de estoque (ADMIN)
+GET {{baseUrl}}/api/v1/reports/stock?page=0&size=20
+Authorization: Bearer {{accessToken}}
+
+### Logout
+POST {{baseUrl}}/api/v1/auth/logout
+Authorization: Bearer {{accessToken}}

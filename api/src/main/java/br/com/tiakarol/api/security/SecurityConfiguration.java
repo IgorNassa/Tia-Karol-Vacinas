@@ -2,51 +2,36 @@ package br.com.tiakarol.api.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
 class SecurityConfiguration {
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http, BearerTokenAuthenticationFilter bearerFilter) throws Exception {
+    SecurityFilterChain filterChain(HttpSecurity http, BearerTokenAuthenticationFilter bearerFilter,
+                                    AuthorizationPolicy policy, SecurityErrorWriter errorWriter) throws Exception {
         return http.csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
-                        .accessDeniedHandler((request, response, exception) -> {
-                            response.setStatus(HttpStatus.FORBIDDEN.value());
-                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                            response.setCharacterEncoding("UTF-8");
-                            response.getWriter().write("{\"message\":\"Acesso negado.\"}");
-                        }))
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/v1/health", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**",
-                                "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
-                        .requestMatchers("/api/v1/auth/logout").authenticated()
-                        .requestMatchers("/api/v1/users/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/financial/**", "/api/v1/reports/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/patients/**").hasAnyRole("ADMIN", "ATTENDANT")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/appointments/*/payments/history").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/appointments/*/payments/void").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/appointments/*/payments/**").hasAnyRole("ADMIN", "ATTENDANT")
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/no-show-resolution").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/appointments/*/reschedule").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/appointments/**").hasAnyRole("ADMIN", "ATTENDANT", "APPLICATOR")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/vaccine-lots/**").hasAnyRole("ADMIN", "ATTENDANT")
-                        .requestMatchers("/api/v1/vaccine-lots/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/v1/vaccines/**").hasAnyRole("ADMIN", "ATTENDANT")
-                        .requestMatchers("/api/v1/vaccines/**").hasRole("ADMIN")
-                        .anyRequest().hasRole("ADMIN"))
+                        .authenticationEntryPoint((request, response, exception) -> errorWriter.unauthorized(request, response))
+                        .accessDeniedHandler((request, response, exception) -> errorWriter.forbidden(request, response)))
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().access(policy::authorize))
+                .headers(headers -> headers
+                        .contentTypeOptions(Customizer.withDefaults())
+                        .frameOptions(frame -> frame.deny())
+                        .referrerPolicy(referrer -> referrer.policy(
+                                org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER))
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'none'; script-src 'self'; "
+                                + "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; "
+                                + "frame-ancestors 'none'; form-action 'none'")))
                 .httpBasic(httpBasic -> httpBasic.disable())
                 .addFilterBefore(bearerFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
